@@ -15,7 +15,7 @@ std::map<std::string, std::vector<std::vector<std::string>>> patternList;
 int inputPtr = 0;
 
 // add position of the token in the code to the object
-struct token {
+struct Token {
     std::string type;
 
     // only one can be true at a time so use a union to save memory?!?
@@ -24,15 +24,15 @@ struct token {
     int numConstVal;
 };
 
-struct cstNode;
+// struct CstNode;
 
-struct cstNode {
+struct CstNode {
     std::string val;
-    std::vector<cstNode*> childrenNodes;
+    std::vector<CstNode*> childrenNodes;
     bool tokenPresent = false;
-    token token;
+    Token token;
 
-    cstNode() {
+    CstNode() {
 
     };
 };
@@ -43,38 +43,37 @@ struct cstNode {
 // the AST should be above everything, no reference to tokens, you should be able to understand the entire program
 // with the AST alone.
 // annoyingly, this technique does not provide type-checking.
-struct astNode;
+// struct AstNode;
 
 // you can use enums in a switch (unlike strings).
 
 
 // members typically capitalised snake case.
-typedef enum {
-    ifNode,
-    whileNode,
-    varNode,
-    numConstNode,
-    exprNode,
-    declNode,
-    stmtSeqNode
-} nodeType;
+enum NodeType {
+    IF_NODE,
+    WHILE_NODE,
+    VAR_NODE,
+    NUMCONST_NODE,
+    EXPR_NODE,
+    DECL_NODE,
+    STMTSEQ_NODE
+};
 
 // convention is to start structs with a capital
-class astNode {
-    public:
-    nodeType type;
-    union nodeBody {
+struct AstNode {
+    NodeType type;
+    union {
         //ifNode
         struct {
-            astNode* condition; // exprNode
-            astNode* ifBody; // stmtSeqNode
-            astNode* elseBody;
+            AstNode* condition; // exprNode
+            AstNode* ifBody; // stmtSeqNode
+            AstNode* elseBody;
         };
 
         //whileNode
         struct {
-            astNode* condition;
-            astNode* body;
+            AstNode* condition;
+            AstNode* body;
         };
 
         //varNode
@@ -91,50 +90,50 @@ class astNode {
         //exprNode
         struct {
             // give operand node another go.
-            astNode* operand1;
+            AstNode* operand1;
             std::string opcode;
-            astNode* operand2;
+            AstNode* operand2;
         };
 
         //declNode
         struct {
-            astNode* variable;
-            astNode* init;
+            AstNode* variable;
+            AstNode* init;
         };
 
         //stmtSeqNode
         struct {
-            std::vector<astNode*> stmts;
+            std::vector<AstNode*> stmts;
         };
     };
 
     // include type assignment
-    astNode(nodeType nodeTypeInput) {
+    AstNode(NodeType nodeTypeInput) {
+        std::memset(this, 0, sizeof(AstNode));
         type = nodeTypeInput;
-        std::memset(&nodeBody, nullptr, sizeof a);
     }
 };
 
-astNode* createExprNode(astNode* operand1, astNode* operand2, std::string opcode) {
+AstNode* createExprNode(AstNode* operand1, AstNode* operand2, std::string opcode) {
     std::cout << "making expr node" << std::endl;
-    astNode* newExprNode = new astNode(exprNode);
+    AstNode* newExprNode = new AstNode(EXPR_NODE);
     newExprNode->operand1 = operand1;
     newExprNode->operand1 = operand2;
     newExprNode->opcode = opcode;
     return newExprNode;
 }
 
-astNode* createNumConstNode(int a) {
+AstNode* createNumConstNode(int a) {
     std::cout << "making num const" << std::endl;
-    astNode* newNumConstNode = new astNode(numConstNode);
+    AstNode* newNumConstNode = new AstNode(NUMCONST_NODE);
     newNumConstNode->val = a;
     return newNumConstNode;
 }
 
-astNode* createVarNode(std::string varName) {
+AstNode* createVarNode(std::string varName) {
     std::cout << "making var node" << std::endl;
     std::cout << varName << std::endl;
-    astNode* newVarNode = new astNode(varNode);
+    AstNode* newVarNode = new AstNode(VAR_NODE);
     std::cout << "finished making var node" << std::endl;
     newVarNode->name = varName;
     std::cout << "finished making var node" << std::endl;
@@ -143,8 +142,8 @@ astNode* createVarNode(std::string varName) {
 
 
 // searches the names of a list of cstNodes and returns the correct pointer.
-cstNode* findChildrenByName(std::vector<cstNode*> childNodes, std::string match) {
-    for (cstNode*& child : childNodes) {
+CstNode* findChildrenByName(std::vector<CstNode*> childNodes, std::string match) {
+    for (CstNode*& child : childNodes) {
         if (child->val == match) {
             return child;
         }
@@ -153,7 +152,7 @@ cstNode* findChildrenByName(std::vector<cstNode*> childNodes, std::string match)
 
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
 // make sure this works with relExp.
-bool expressionInUse(cstNode* cstExprNode) {
+bool expressionInUse(CstNode* cstExprNode) {
     std::string expressionType = cstExprNode->val;
     // checking the children of expression* (make sure this index is correct)
     if (((cstExprNode->childrenNodes)[1]->val).size() == 1) {
@@ -164,9 +163,9 @@ bool expressionInUse(cstNode* cstExprNode) {
     }
 }
 
-std::vector<token> tokenStream;
+std::vector<Token> tokenStream;
 
-std::string findOpcode(cstNode* cstExprNode) {
+std::string findOpcode(CstNode* cstExprNode) {
     if (cstExprNode->tokenPresent) {
         return findOpcode((cstExprNode->childrenNodes[0]));
     }
@@ -174,13 +173,13 @@ std::string findOpcode(cstNode* cstExprNode) {
 }
 
 // converts CST simpleExp into a expression tree.
-astNode* addExprTreeToAST(cstNode* cstSimpleExp) {
+AstNode* addExprTreeToAST(CstNode* cstSimpleExp) {
     std::cout << "starting express tree stuff" << std::endl;
     std::string expressionType = cstSimpleExp->val;
-    std::vector<cstNode*> childrenNodes = cstSimpleExp->childrenNodes;
+    std::vector<CstNode*> childrenNodes = cstSimpleExp->childrenNodes;
 
     if (expressionType == "factor") {
-        token factorToken = childrenNodes[0]->token;
+        Token factorToken = childrenNodes[0]->token;
         if (factorToken.type == "_NUMCONST") {
             return createNumConstNode(factorToken.numConstVal); // numbers stored w strings _eeesh (use a union?)
         }
@@ -193,10 +192,10 @@ astNode* addExprTreeToAST(cstNode* cstSimpleExp) {
     std::cout << "non terminal" << std::endl;
 
     if (expressionInUse(cstSimpleExp)) {
-        astNode* operand1 = addExprTreeToAST(childrenNodes[0]);
-        astNode* operand2 = addExprTreeToAST(childrenNodes[1]->childrenNodes[1]);
+        AstNode* operand1 = addExprTreeToAST(childrenNodes[0]);
+        AstNode* operand2 = addExprTreeToAST(childrenNodes[1]->childrenNodes[1]);
         std::string opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
-        astNode* newExprNode = createExprNode(operand1, operand2, opcode);
+        AstNode* newExprNode = createExprNode(operand1, operand2, opcode);
 
         return newExprNode;
     }
@@ -206,9 +205,9 @@ astNode* addExprTreeToAST(cstNode* cstSimpleExp) {
 }
 
 // some nasty code is required to convert the recursive tree structure into a linear list of declarations.
-std::vector<astNode*> addDecListToAST(cstNode* decListCSTNode, std::vector<astNode*> decASTNodeVector) {
+std::vector<AstNode*> addDecListToAST(CstNode* decListCSTNode, std::vector<AstNode*> decASTNodeVector) {
     std::cout << "making dec list" << std::endl;
-    std::vector<cstNode*> childrenNodes = decListCSTNode->childrenNodes;
+    std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
     std::cout << childrenNodes.size() << std::endl;
     if (childrenNodes.size() == 1) { // at dead end...
         return {};
@@ -216,15 +215,15 @@ std::vector<astNode*> addDecListToAST(cstNode* decListCSTNode, std::vector<astNo
     for (int i = 0; i < 2; i++) {
         if (i == 0) { // varDecl...
             std::cout << "making var decl" << std::endl;
-            cstNode* varDeclNode = childrenNodes[0];
-            token idToken = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token;
+            CstNode* varDeclNode = childrenNodes[0];
+            Token idToken = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token;
             std::cout << "hola" << std::endl;
 
-            cstNode* simpleExp = (varDeclNode->childrenNodes)[1]->childrenNodes[2];
+            CstNode* simpleExp = (varDeclNode->childrenNodes)[1]->childrenNodes[2];
 
             
 
-            astNode* newDeclNode = new astNode(declNode);
+            AstNode* newDeclNode = new AstNode(DECL_NODE);
 
             newDeclNode->variable = createVarNode(idToken.varName);
 
@@ -239,7 +238,7 @@ std::vector<astNode*> addDecListToAST(cstNode* decListCSTNode, std::vector<astNo
         }
         else { // further decList...
             // proper nasty but required.
-            std::vector<astNode*> newDecs = addDecListToAST(childrenNodes[i], decASTNodeVector);
+            std::vector<AstNode*> newDecs = addDecListToAST(childrenNodes[i], decASTNodeVector);
             decASTNodeVector.insert(decASTNodeVector.end(), newDecs.begin(), newDecs.end());
             return decASTNodeVector;
 
@@ -249,13 +248,13 @@ std::vector<astNode*> addDecListToAST(cstNode* decListCSTNode, std::vector<astNo
 }
 
 // converts CST expStmt to an expression node.
-astNode* addExprNodeToAST(cstNode* cstExprStmt) {
+AstNode* addExprNodeToAST(CstNode* cstExprStmt) {
     // probably use a different name for childrenNodes.
-    std::vector<cstNode*> childrenNodes = cstExprStmt->childrenNodes;
+    std::vector<CstNode*> childrenNodes = cstExprStmt->childrenNodes;
 
     if (childrenNodes.size() == 3) { // exp part of grammar...
-        astNode* varNode = createVarNode(childrenNodes[0]->childrenNodes[0]->val);
-        astNode* operand2 = addExprNodeToAST(childrenNodes[0]->childrenNodes[2]);
+        AstNode* varNode = createVarNode(childrenNodes[0]->childrenNodes[0]->val);
+        AstNode* operand2 = addExprNodeToAST(childrenNodes[0]->childrenNodes[2]);
         return createExprNode(varNode, operand2, "_assign");
     }
 
@@ -265,14 +264,14 @@ astNode* addExprNodeToAST(cstNode* cstExprStmt) {
 }
 
 // forward definition required to manage mutual recursion.
-std::vector<astNode*> addStmtListToAST(cstNode* stmtList, std::vector<astNode*> smtASTNodeVector);
+std::vector<AstNode*> addStmtListToAST(CstNode* stmtList, std::vector<AstNode*> smtASTNodeVector);
 
 // converts CST cmpdStmt to AST stmtSeqNode
-astNode* addStmtSeqNodeToAST(cstNode* cstCompoundStmt) {
+AstNode* addStmtSeqNodeToAST(CstNode* cstCompoundStmt) {
     std::cout << "making statement sequence" << std::endl;
-    std::vector<cstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
+    std::vector<CstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
 
-    astNode* newStmtSeqNode = new astNode(STMTSEQ_NODE);
+    AstNode* newStmtSeqNode = new AstNode(STMTSEQ_NODE);
 
     for (int i = 0; i < 4; i++) {
         // decList
@@ -290,10 +289,10 @@ astNode* addStmtSeqNodeToAST(cstNode* cstCompoundStmt) {
     return newStmtSeqNode;
 }
 
-astNode* addWhileNodeToAST(cstNode* cstIterStmt) {
-    std::vector<cstNode*> childrenNodes = cstIterStmt->childrenNodes;
+AstNode* addWhileNodeToAST(CstNode* cstIterStmt) {
+    std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
 
-    astNode* newWhileNode = new astNode(whileNode);
+    AstNode* newWhileNode = new AstNode(WHILE_NODE);
 
     // can this be done without for loops.
     for (int i = 0; i < childrenNodes.size(); i++) {
@@ -310,10 +309,10 @@ astNode* addWhileNodeToAST(cstNode* cstIterStmt) {
 
 
 // converts CST selectStmt to AST ifNode
-astNode* addIfNodeToAST(cstNode* cstSelectStmt) {
-    std::vector<cstNode*> childrenNodes = cstSelectStmt->childrenNodes;
+AstNode* addIfNodeToAST(CstNode* cstSelectStmt) {
+    std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
 
-    astNode* newIfNode = new astNode(ifNode);
+    AstNode* newIfNode = new AstNode(IF_NODE);
 
     for (int i = 0; i < childrenNodes.size(); i++) {
         if (i == 2) {
@@ -331,8 +330,8 @@ astNode* addIfNodeToAST(cstNode* cstSelectStmt) {
 }
 
 // deals with a stmt grammar expression.
-astNode* addStmtNodeToAST(cstNode* stmtNodeAST) {
-    cstNode* specificStmt = stmtNodeAST->childrenNodes[0];
+AstNode* addStmtNodeToAST(CstNode* stmtNodeAST) {
+    CstNode* specificStmt = stmtNodeAST->childrenNodes[0];
     std::string stmtType = specificStmt->val;
 
     // switch doesn't work with strings :(
@@ -360,9 +359,9 @@ astNode* addStmtNodeToAST(cstNode* stmtNodeAST) {
 }
 
 // can this logic be merged with the previous function?
-std::vector<astNode*> addStmtListToAST(cstNode* stmtList, std::vector<astNode*> smtASTNodeVector) {
+std::vector<AstNode*> addStmtListToAST(CstNode* stmtList, std::vector<AstNode*> smtASTNodeVector) {
     std::cout << "stmt List" << std::endl;
-    std::vector<cstNode*> childrenNodes = stmtList->childrenNodes;
+    std::vector<CstNode*> childrenNodes = stmtList->childrenNodes;
     if (childrenNodes.size() == 1) { // at dead end...
         return {};
     }
@@ -375,7 +374,7 @@ std::vector<astNode*> addStmtListToAST(cstNode* stmtList, std::vector<astNode*> 
         }
         else { // further stmtList...
             
-            std::vector<astNode*> newStmts = addStmtListToAST(childrenNodes[i], smtASTNodeVector);
+            std::vector<AstNode*> newStmts = addStmtListToAST(childrenNodes[i], smtASTNodeVector);
             smtASTNodeVector.insert(smtASTNodeVector.end(), newStmts.begin(), newStmts.end());
             return smtASTNodeVector;
         }
@@ -384,13 +383,13 @@ std::vector<astNode*> addStmtListToAST(cstNode* stmtList, std::vector<astNode*> 
 }
 
 
-astNode* createAST(cstNode* cstRootNode) {
+AstNode* createAST(CstNode* cstRootNode) {
     // currently first node is always a compoundStmt node.
     return addStmtSeqNodeToAST(cstRootNode);
 }
 
-cstNode* createCstNode(std::string e) {
-    cstNode* tmp = new cstNode;
+CstNode* createCstNode(std::string e) {
+    CstNode* tmp = new CstNode;
     tmp->val = e;
     tmp->childrenNodes = {};
     return tmp;
@@ -448,9 +447,9 @@ void displayVector(std::vector<std::string> vectorToDisplay) {
     std::cout << outputString << std::endl;
 }
 
-int countNodes(cstNode* t) {
+int countNodes(CstNode* t) {
     if (t != NULL) {
-        std::vector<cstNode*> children = t->childrenNodes;
+        std::vector<CstNode*> children = t->childrenNodes;
         int childrenNodes = 0;
         for (int i = 0; i < children.size(); i++) {
             childrenNodes += countNodes(children[i]);
@@ -459,9 +458,9 @@ int countNodes(cstNode* t) {
     }
 }
 
-void print_tree(cstNode* t) {
+void print_tree(CstNode* t) {
     if (t != NULL) {
-        std::vector<cstNode*> children = t->childrenNodes;
+        std::vector<CstNode*> children = t->childrenNodes;
         for (int i = 0; i < children.size(); i++) {
             print_tree(children[i]);
         }
@@ -470,8 +469,8 @@ void print_tree(cstNode* t) {
 }
 
 // converts the provided source code string into a vector of tokens.
-std::vector<token> tokenize(const std::string source_code, bool debugMode) {
-    std::vector<token> tokenList;
+std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
+    std::vector<Token> tokenList;
     std::string previousToken;
     std::string tokenType;
 
@@ -629,7 +628,7 @@ std::vector<token> tokenize(const std::string source_code, bool debugMode) {
             numConstVal = "";
         }
 
-        token tokenObj;
+        Token tokenObj;
         tokenObj.type = tokenType;
         tokenList.push_back(tokenObj);
         previousToken = tokenType;
@@ -648,11 +647,11 @@ std::vector<token> tokenize(const std::string source_code, bool debugMode) {
 
 // recursive function to validate a provided grammar pattern for the current point in the token stream.
 // TO-DO: Probably rewrite without pointers, just put the object itself inside the vector.
-bool validPattern(std::vector<std::string> pattern, cstNode* rootTreeNode, bool debugMode) {
+bool validPattern(std::vector<std::string> pattern, CstNode* rootTreeNode, bool debugMode) {
     rootTreeNode->childrenNodes.clear();
 
     for (std::string &component : pattern) { // by reference is more efficient.
-        cstNode* newTreeNode = createCstNode(component);
+        CstNode* newTreeNode = createCstNode(component);
         rootTreeNode->childrenNodes.push_back(newTreeNode);
 
         // if not a token...
@@ -692,8 +691,8 @@ bool validPattern(std::vector<std::string> pattern, cstNode* rootTreeNode, bool 
 }
 
 // returns the root node of the Concrete Syntax Tree or NULL in the event of a syntax error.
-cstNode* generateCST(bool debugMode) {
-    cstNode* rootNode = createCstNode("compoundStmt");
+CstNode* generateCST(bool debugMode) {
+    CstNode* rootNode = createCstNode("compoundStmt");
 
     if (!validPattern(patternList["compoundStmt"][0], rootNode, debugMode)) {
         return NULL;
@@ -728,7 +727,7 @@ int main() {
     std::cout << "DONE]" << std::endl;
 
     std::cout << "Generating CST... [";
-    cstNode* cstRootNode = generateCST(debugMode);
+    CstNode* cstRootNode = generateCST(debugMode);
     if (cstRootNode != NULL) {
         std::cout << "DONE]" << std::endl;
     }
@@ -738,7 +737,7 @@ int main() {
 
 
     std::cout << "Generating AST..." << std::endl;
-    astNode* astRootNode = createAST(cstRootNode);
+    AstNode* astRootNode = createAST(cstRootNode);
     std::cout << "DONE" << std::endl;
 
 
@@ -747,5 +746,6 @@ int main() {
     
 
     //std::cout << countNodes(cstRootNode) << std::endl;
-       
+    return 0; 
 }
+
