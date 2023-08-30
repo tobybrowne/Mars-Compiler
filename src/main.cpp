@@ -49,7 +49,7 @@ struct CstNode {
 
 
 // members typically capitalised snake case.
-enum NodeType {
+enum class Node {
     IF_NODE,
     WHILE_NODE,
     VAR_NODE,
@@ -59,7 +59,86 @@ enum NodeType {
     STMTSEQ_NODE
 };
 
-// convention is to start structs with a capital
+enum class Operand {
+    VAR_NODE,
+    EXPR_NODE,
+    NUMCONST_NODE
+};
+
+enum class Statement {
+    DECL_NODE,
+    IF_NODE,
+    WHILE_NODE
+};
+
+enum class OpCode {
+    ADD,
+    SUB,
+    DIV
+};
+
+class VarNode {
+    public:
+        std::string name;
+};
+
+class NumConstNode {
+    public:
+        int val;
+};
+
+class ExprNode {
+    public:
+        OpCode op;
+        Operand aType;
+        Operand bType;
+        union {
+            VarNode *aVar;
+            ExprNode *aExpr;
+            NumConstNode *aNum;
+        };
+        union {
+            VarNode *bVar;
+            ExprNode *bExpr;
+            NumConstNode *bNum;
+        };
+};
+
+union Initializer {
+    VarNode var;
+    ExprNode expr;
+    NumConstNode num;
+};
+
+class DeclNode {
+    public:
+        VarNode variable;
+        Operand initType;
+        Initializer init;
+};
+
+union Stmt {
+    DeclNode decl;
+    IfNode ifn;
+    WhileNode whilen;
+};
+
+class StmtSeqNode {
+    std::vector<std::tuple<Statement, Stmt >> seq; 
+};
+
+class IfNode {
+    public:
+        ExprNode condition;
+        StmtSeqNode ifBody;
+        StmtSeqNode elseBody;
+};
+
+class WhileNode {
+    public:
+        ExprNode condition;
+        StmtSeqNode body;
+};
 struct AstNode {
     NodeType type;
     union {
