@@ -31,10 +31,6 @@ struct CstNode {
     std::vector<CstNode*> childrenNodes;
     bool tokenPresent = false;
     Token token;
-
-    CstNode() {
-
-    };
 };
 
 
@@ -45,10 +41,6 @@ struct CstNode {
 // annoyingly, this technique does not provide type-checking.
 // struct AstNode;
 
-// you can use enums in a switch (unlike strings).
-
-
-// members typically capitalised snake case.
 enum class Node {
     IF_NODE,
     WHILE_NODE,
@@ -68,13 +60,18 @@ enum class Operand {
 enum class Statement {
     DECL_NODE,
     IF_NODE,
-    WHILE_NODE
+    WHILE_NODE,
+    STMT_NODE
 };
 
 enum class OpCode {
     ADD,
     SUB,
-    DIV
+    DIV,
+    LE,
+    LT,
+    GE,
+    GT
 };
 
 class VarNode {
@@ -92,55 +89,48 @@ class ExprNode {
         OpCode op;
         Operand aType;
         Operand bType;
-        union {
-            VarNode *aVar;
-            ExprNode *aExpr;
-            NumConstNode *aNum;
+        union a {
+            VarNode *var;
+            ExprNode *expr;
+            NumConstNode *num;
         };
-        union {
-            VarNode *bVar;
-            ExprNode *bExpr;
-            NumConstNode *bNum;
+        union b {
+            VarNode *var;
+            ExprNode *expr;
+            NumConstNode *num;
         };
-};
-
-union Initializer {
-    VarNode var;
-    ExprNode expr;
-    NumConstNode num;
 };
 
 class DeclNode {
     public:
         VarNode variable;
         Operand initType;
-        Initializer init;
+        union { 
+            VarNode var;
+            ExprNode expr;
+            NumConstNode num;
+        } init;
 };
 
-union Stmt {
-    DeclNode decl;
-    IfNode ifn;
-    WhileNode whilen;
-};
-
-class StmtSeqNode {
-    std::vector<std::tuple<Statement, Stmt >> seq; 
-};
-
-class IfNode {
+class Stmt {
     public:
-        ExprNode condition;
-        StmtSeqNode ifBody;
-        StmtSeqNode elseBody;
+        Statement type;
+        union node {
+            struct {
+                ExprNode condition;
+                Stmt *ifBody;
+                Stmt *elseBody;
+            } ifNode;
+            struct {
+                ExprNode condition;
+                Stmt *whileBody;
+            } whileNode;
+            std::vector<Stmt*> seq;
+        };
 };
 
-class WhileNode {
-    public:
-        ExprNode condition;
-        StmtSeqNode body;
-};
 struct AstNode {
-    NodeType type;
+    Node type;
     union {
         //ifNode
         struct {
@@ -187,7 +177,7 @@ struct AstNode {
     };
 
     // include type assignment
-    AstNode(NodeType nodeTypeInput) {
+    AstNode(Node nodeTypeInput) {
         std::memset(this, 0, sizeof(AstNode));
         type = nodeTypeInput;
     }
