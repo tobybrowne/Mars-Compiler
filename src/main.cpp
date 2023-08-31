@@ -83,6 +83,8 @@ class VarNode {
 class NumConstNode {
     public:
         int val;
+    NumConstNode();
+    NumConstNode(int val);
 };
 
 class ExprNode {
@@ -100,6 +102,7 @@ class ExprNode {
             ExprNode *expr;
             NumConstNode *num;
         } b;
+        ExprNode();
         ExprNode(OpCode opcode, Operand aType, Operand bType);
 };
 
@@ -130,6 +133,11 @@ class Stmt {
             std::vector<Stmt*> seq;
         };
 };
+
+NumConstNode::NumConstNode(int val): val(val)
+{
+
+}
 
 ExprNode::ExprNode(OpCode opcode, Operand aType, Operand bType): opcode(opcode), aType(aType), bType(bType)
 {
