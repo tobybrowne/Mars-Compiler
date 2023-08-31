@@ -26,11 +26,12 @@ struct Token {
 
 // struct CstNode;
 
-struct CstNode {
-    std::string val;
-    std::vector<CstNode*> childrenNodes;
-    bool tokenPresent = false;
-    Token token;
+class CstNode {
+    public:
+        std::string val;
+        std::vector<CstNode*> childrenNodes;
+        bool tokenPresent = false;
+        Token token;
 };
 
 
@@ -77,28 +78,35 @@ enum class OpCode {
 class VarNode {
     public:
         std::string name;
+    VarNode();
+    VarNode(const std::string& varName);
 };
 
 class NumConstNode {
     public:
         int val;
+    NumConstNode();
+    NumConstNode(int val);
 };
 
 class ExprNode {
     public:
-        OpCode op;
+        OpCode opcode;
         Operand aType;
         Operand bType;
         union a {
             VarNode *var;
             ExprNode *expr;
             NumConstNode *num;
-        };
+        } a;
         union b {
             VarNode *var;
             ExprNode *expr;
             NumConstNode *num;
-        };
+        } b;
+        ExprNode();
+        ExprNode(OpCode opcode, Operand aType, Operand bType);
+        ~ExprNode();
 };
 
 class DeclNode {
@@ -128,6 +136,92 @@ class Stmt {
             std::vector<Stmt*> seq;
         };
 };
+
+VarNode::VarNode(const std::string& varName)
+{
+    name = std::string(varName);
+}
+
+NumConstNode::NumConstNode(int val): val(val)
+{
+
+}
+
+ExprNode::ExprNode(OpCode opcode, Operand aType, Operand bType): opcode(opcode), aType(aType), bType(bType)
+{
+    switch (aType) {
+        case Operand::VAR_NODE:
+        {
+            a.var = new VarNode;
+            break;
+        }
+        case Operand::EXPR_NODE:
+        {
+            a.expr = new ExprNode;
+            break;
+        }
+        case Operand::NUMCONST_NODE:
+        {
+            a.num = new NumConstNode;
+            break;
+        }
+    }
+    switch (bType) {
+        case Operand::VAR_NODE:
+        {
+            b.var = new VarNode;
+            break;
+        }
+        case Operand::EXPR_NODE:
+        {
+            b.expr = new ExprNode;
+            break;
+        }
+        case Operand::NUMCONST_NODE:
+        {
+            b.num = new NumConstNode;
+            break;
+        }
+    }
+}
+
+ExprNode::~ExprNode()
+{
+    switch (aType) {
+        case Operand::VAR_NODE:
+        {
+            delete a.var;
+            break;
+        }
+        case Operand::EXPR_NODE:
+        {
+            delete a.expr;
+            break;
+        }
+        case Operand::NUMCONST_NODE:
+        {
+            delete a.num;
+            break;
+        }
+    }
+    switch (bType) {
+        case Operand::VAR_NODE:
+        {
+            delete b.var;
+            break;
+        }
+        case Operand::EXPR_NODE:
+        {
+            delete b.expr;
+            break;
+        }
+        case Operand::NUMCONST_NODE:
+        {
+            delete b.num;
+            break;
+        }
+    }
+}
 
 struct AstNode {
     Node type;
