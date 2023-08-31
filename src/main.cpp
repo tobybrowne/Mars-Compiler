@@ -26,11 +26,12 @@ struct Token {
 
 // struct CstNode;
 
-struct CstNode {
-    std::string val;
-    std::vector<CstNode*> childrenNodes;
-    bool tokenPresent = false;
-    Token token;
+class CstNode {
+    public:
+        std::string val;
+        std::vector<CstNode*> childrenNodes;
+        bool tokenPresent = false;
+        Token token;
 };
 
 
@@ -86,19 +87,20 @@ class NumConstNode {
 
 class ExprNode {
     public:
-        OpCode op;
+        OpCode opcode;
         Operand aType;
         Operand bType;
         union a {
             VarNode *var;
             ExprNode *expr;
             NumConstNode *num;
-        };
+        } a;
         union b {
             VarNode *var;
             ExprNode *expr;
             NumConstNode *num;
-        };
+        } b;
+        ExprNode(OpCode opcode, Operand aType, Operand bType);
 };
 
 class DeclNode {
@@ -128,6 +130,44 @@ class Stmt {
             std::vector<Stmt*> seq;
         };
 };
+
+ExprNode::ExprNode(OpCode opcode, Operand aType, Operand bType): opcode(opcode), aType(aType), bType(bType)
+{
+    switch (aType) {
+        case Operand::VAR_NODE:
+        {
+            a.var = new VarNode;
+            break;
+        }
+        case Operand::EXPR_NODE:
+        {
+            a.expr = new ExprNode;
+            break;
+        }
+        case Operand::NUMCONST_NODE:
+        {
+            a.num = new NumConstNode;
+            break;
+        }
+    }
+    switch (bType) {
+        case Operand::VAR_NODE:
+        {
+            b.var = new VarNode;
+            break;
+        }
+        case Operand::EXPR_NODE:
+        {
+            b.expr = new ExprNode;
+            break;
+        }
+        case Operand::NUMCONST_NODE:
+        {
+            b.num = new NumConstNode;
+            break;
+        }
+    }
+}
 
 struct AstNode {
     Node type;
