@@ -639,25 +639,27 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt) {
     return newStmtSeqNode;
 }
 
-//Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
-//    std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
-//
-//    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
-//
-//    for (int i = 0; i < childrenNodes.size(); i++) {
-//        if (i == 2) {
-//            newIfNode->ifNode.condition = addExprTreeToAST(childrenNodes[i])->data.expr;
-//        }
-//        else if (i == 4) {
-//            newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[i]);
-//        }
-//        else if (i == 6) {
-//            newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[i]);
-//        }
-//    }
-//
-//    return newIfNode;
-//}
+Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
+    std::cout << "============= creating if node =============" << std::endl;
+    std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
+
+    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
+
+    for (int i = 0; i < childrenNodes.size(); i++) {
+        if (i == 2) {
+            // is this always an expression?
+            newIfNode->ifNode.condition = addExprTreeToAST(childrenNodes[i])->data.expr;
+        }
+        else if (i == 4) {
+            newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[i]);
+        }
+        else if (i == 6) {
+            newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[i]);
+        }
+    }
+
+    return newIfNode;
+}
 
 
 
@@ -676,8 +678,7 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
 
     }
     else if (stmtType == "selectStmt") {
-        // add later...
-        //return createIfNodeAST(specificStmt);
+        return createIfNodeAST(specificStmt);
 
     }
     else if (stmtType == "iterStmt") {
@@ -745,7 +746,7 @@ void defineLanguageGrammar() {
     patternList["typeSpec"] = { {"_int"} };
 
     patternList["stmtList"] = { {"stmt", "stmtList"}, {"E"} };
-    patternList["selectStmt"] = { {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt"}, {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt", "_else", "compoundStmt"} };
+    patternList["selectStmt"] = { {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt", "_else", "compoundStmt"}, {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt"},};
 
     patternList["iterStmt"] = { {"_while", "_openbracket", "simpleExp", "_closebracket", "compoundStmt"} };
     patternList["returnStmt"] = { {"_return", "_semi"}, {"_return", "exp", "_semi"} };
@@ -806,6 +807,7 @@ void print_tree(CstNode* t) {
     }
 }
 
+// tokenizer can't tolerate indentation atm.
 // converts the provided source code string into a vector of tokens.
 std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
     std::vector<Token> tokenList;
@@ -987,8 +989,10 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
 // TO-DO: Probably rewrite without pointers, just put the object itself inside the vector.
 bool validPattern(std::vector<std::string> pattern, CstNode* rootTreeNode, bool debugMode) {
     rootTreeNode->childrenNodes.clear();
+    
 
     for (std::string &component : pattern) { // by reference is more efficient.
+        
         CstNode* newTreeNode = createCstNode(component);
         rootTreeNode->childrenNodes.push_back(newTreeNode);
 
@@ -1011,7 +1015,6 @@ bool validPattern(std::vector<std::string> pattern, CstNode* rootTreeNode, bool 
             }
         }
         else {
-            assert(inputPtr < tokenStream.size());
             newTreeNode->token = tokenStream[inputPtr];
             newTreeNode->tokenPresent = true;
 
@@ -1064,7 +1067,7 @@ int main() {
 
 
     std::cout << "Tokenizing Source Code... [";
-    tokenStream = tokenize(contents, false);
+    tokenStream = tokenize(contents, true);
     std::cout << "DONE]" << std::endl;
 
     
