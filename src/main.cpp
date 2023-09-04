@@ -245,8 +245,8 @@ class Stmt {
             } ifNode;
 
             struct {
-                ExprNode condition;
-                Stmt *whileBody;
+                ExprNode* condition;
+                Stmt* body;
             } whileNode;
 
             struct {
@@ -519,26 +519,7 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
 //}
 
 
-//AstNode* addWhileNodeToAST(CstNode* cstIterStmt) {
-//    std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
-//
-//    AstNode* newWhileNode = new AstNode(WHILE_NODE);
-//
-//    // can this be done without for loops.
-//    for (int i = 0; i < childrenNodes.size(); i++) {
-//        if (i == 2) {
-//            newWhileNode->condition = addExprTreeToAST(childrenNodes[i]);
-//        }
-//        else if (i == 4) {
-//            newWhileNode->body = addStmtSeqNodeToAST(childrenNodes[i]);
-//        }
-//    }
-//
-//    return newWhileNode;
-//}
 
-
-// converts CST selectStmt to AST ifNode
 
 
 // converts CST expStmt to an expression node.
@@ -645,6 +626,8 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
 
     Stmt* newIfNode = new Stmt(Statement::IF_NODE);
 
+
+    // why is this in a for loop? just use the indexes directly.
     for (int i = 0; i < childrenNodes.size(); i++) {
         if (i == 2) {
             // is this always an expression?
@@ -661,6 +644,18 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
     return newIfNode;
 }
 
+// creates AST while node from CST node.
+Stmt* createWhileNodeToAST(CstNode* cstIterStmt) {
+    std::cout << "============= creating while node =============" << std::endl;
+    std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
+
+    Stmt* newWhileNode = new Stmt(Statement::WHILE_NODE);
+
+    newWhileNode->whileNode.condition = addExprTreeToAST(childrenNodes[2])->data.expr;
+    newWhileNode->whileNode.body = createStmtSeqNodeAST(childrenNodes[4]);
+
+    return newWhileNode;
+}
 
 
 // deals with a stmt grammar expression.
@@ -682,8 +677,7 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
 
     }
     else if (stmtType == "iterStmt") {
-        // add later...
-        //return addWhileNodeToAST(specificStmt);
+        return createWhileNodeToAST(specificStmt);
 
     }
     else if (stmtType == "returnStmt") {
