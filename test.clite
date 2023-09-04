@@ -1,5 +1,10 @@
 {
 int a = 4;
 int b = 3;
+
+if(a > b){
+	int c = 5;
+}
+
 }
 

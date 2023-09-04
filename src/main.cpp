@@ -287,60 +287,6 @@ Stmt::~Stmt() {
     }
 }
 
-// struct AstNode {
-//     Node type;
-//     union {
-//         //ifNode
-//         struct {
-//             AstNode* condition; // exprNode
-//             AstNode* ifBody; // stmtSeqNode
-//             AstNode* elseBody;
-//         };
-//
-//         //whileNode
-//         struct {
-//             AstNode* condition;
-//             AstNode* body;
-//         };
-//
-//         //varNode
-//         struct {
-//             // remember a variable has no attribute val!
-//             std::string name;
-//         };
-//
-//         //numConstNode
-//         struct {
-//             int val;
-//         };
-//
-//         //exprNode
-//         struct {
-//             // give operand node another go.
-//             AstNode* operand1;
-//             std::string opcode;
-//             AstNode* operand2;
-//         };
-//
-//         //declNode
-//         struct {
-//             AstNode* variable;
-//             AstNode* init;
-//         };
-//
-//         //stmtSeqNode
-//         struct {
-//             std::vector<AstNode*> stmts;
-//         };
-//     };
-//
-//     // include type assignment
-//     AstNode(Node nodeTypeInput) {
-//         std::memset(this, 0, sizeof(AstNode));
-//         type = nodeTypeInput;
-//     }
-// };
-
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
 // make sure this works with relExp.
 bool expressionInUse(CstNode* cstExprNode) {
@@ -354,10 +300,11 @@ bool expressionInUse(CstNode* cstExprNode) {
     }
 }
 
+// this is required because sometimes the opcode has a parent node like "relOp", sometimes it does not.
 OpCode findOpcode(CstNode* cstExprNode) {
-    if (cstExprNode->childrenNodes[1]->childrenNodes[0]->tokenPresent) {
-        std::string opCodeString = cstExprNode->childrenNodes[1]->childrenNodes[0]->val;
 
+    if (cstExprNode->tokenPresent) {
+        std::string opCodeString = cstExprNode->val;
         if (opCodeString == "_lessthan") {
             return OpCode::LT;
         }
@@ -401,7 +348,6 @@ OpCode findOpcode(CstNode* cstExprNode) {
     else {
         return findOpcode(cstExprNode->childrenNodes[0]);
     }
-    
 }
 
 NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
@@ -413,14 +359,15 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
         Token factorToken = childrenNodes[0]->token;
         std::string factorType = factorToken.type;
 
-        std::cout << "here: "<< factorType << std::endl;
+        std::cout << "here: " << factorType << std::endl;
         std::cout << "gutentag" << std::endl;
 
         if (factorType == "_NUMCONST") {
             NumVarExpr* newNumVarExpr = new NumVarExpr;
             newNumVarExpr->type = Operand::NUMCONST_NODE;
             newNumVarExpr->data.numconst = new NumConstNode(factorToken.numConstVal);
-            return newNumVarExpr; 
+            std::cout << "heya" << std::endl;
+            return newNumVarExpr;
         }
         else if (factorType == "_ID") {
 
@@ -434,58 +381,67 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
     }
 
     // need to figure out how a unaryRelExp will actually be made.
-    else if (expressionType == "unaryRelExp") { // has a different structure than others.
-        // if not in use...
-        std::cout << childrenNodes.size() << std::endl;
-        if (childrenNodes.size() == 1) {
-            return addExprTreeToAST(childrenNodes[0]);
+    else if (expressionType == "unaryRelExp" || expressionInUse(cstExpr)) { // has a different structure than others.
+        NumVarExpr* operand1;
+        NumVarExpr* operand2;
+        OpCode opcode;
+
+        // unaryRelExp case...
+        if (expressionType == "unaryRelExp") {
+            // if not in use...
+            std::cout << childrenNodes.size() << std::endl;
+            if (childrenNodes.size() == 1) {
+                return addExprTreeToAST(childrenNodes[0]);
+            }
+            else {
+                std::cout << "in use" << std::endl;
+                operand1 = addExprTreeToAST(childrenNodes[1]);
+                std::cout << "operand 1 done" << std::endl;
+                operand2 = operand1;
+                std::cout << "operand 2 done" << std::endl;
+
+                opcode = findOpcode(childrenNodes[0]);
+                std::cout << "found opcode" << std::endl;
+            }
         }
+
+        // normal in use expression case...
         else {
-            // do this later (unary rel exp is disabled for now)
-        }
-    }
+            std::cout << "in use" << std::endl;
+            operand1 = addExprTreeToAST(childrenNodes[0]);
+            std::cout << "operand 1 done" << std::endl;
+            operand2 = addExprTreeToAST(childrenNodes[1]->childrenNodes[1]);
+            std::cout << "operand 2 done" << std::endl;
 
-    else if (expressionType == "relExp") {
-        // if not in use...
-        if (childrenNodes.size() == 1) {
-            return addExprTreeToAST(childrenNodes[0]);
+            opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
+            std::cout << "found opcode" << std::endl;
         }
-        else {
-            // do this later (rel exp is disabled for now)
-        }
-    }
-
-    else if (expressionInUse(cstExpr)) {
-        NumVarExpr* operand1 = addExprTreeToAST(childrenNodes[0]);
-        NumVarExpr* operand2 = addExprTreeToAST(childrenNodes[1]->childrenNodes[1]);
-
-        OpCode opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
 
         ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
 
         // nodes don't link to NumVarExpr types - just the actual operand type. 
         switch (operand1->type) {
-            case Operand::VAR_NODE: {
-                newExprNode->a.var = operand1->data.var;
-            }
-            case Operand::EXPR_NODE: {
-                newExprNode->a.expr = operand1->data.expr;
-            }
-            case Operand::NUMCONST_NODE: {
-                newExprNode->a.num = operand1->data.numconst;
-            }
+        case Operand::VAR_NODE: {
+            newExprNode->a.var = operand1->data.var;
+        }
+        case Operand::EXPR_NODE: {
+            newExprNode->a.expr = operand1->data.expr;
+        }
+        case Operand::NUMCONST_NODE: {
+            newExprNode->a.num = operand1->data.numconst;
+        }
         }
 
         switch (operand2->type) {
-            case Operand::VAR_NODE: {
-                newExprNode->b.var = operand2->data.var;
-            }
-            case Operand::EXPR_NODE: {
-                newExprNode->b.expr = operand2->data.expr;
-            }
-            case Operand::NUMCONST_NODE: {
-                newExprNode->b.num = operand2->data.numconst;
-            }
+        case Operand::VAR_NODE: {
+            newExprNode->b.var = operand2->data.var;
+        }
+        case Operand::EXPR_NODE: {
+            newExprNode->b.expr = operand2->data.expr;
+        }
+        case Operand::NUMCONST_NODE: {
+            newExprNode->b.num = operand2->data.numconst;
+        }
         }
 
         NumVarExpr* newNumVarExpr = new NumVarExpr;
@@ -493,7 +449,10 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
         newNumVarExpr->data.expr = newExprNode;
 
         return newNumVarExpr;
+
     }
+    
+
     else {
         std::cout << "not in use" << std::endl;
         return addExprTreeToAST(childrenNodes[0]);
@@ -580,26 +539,7 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
 
 
 // converts CST selectStmt to AST ifNode
-//AstNode* createIfNodeAST(CstNode* cstSelectStmt) {
-//    std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
-//
-//    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
-//    newDeclNode->declNode.variable = new VarNode(idToken.varName);
-//
-//    for (int i = 0; i < childrenNodes.size(); i++) {
-//        if (i == 2) {
-//            newIfNode->condition = addExprTreeToAST(childrenNodes[i]);
-//        }
-//        else if (i == 4) {
-//            newIfNode->ifBody = addStmtSeqNodeToAST(childrenNodes[i]);
-//        }
-//        else if (i == 6) {
-//            newIfNode->elseBody = addStmtSeqNodeToAST(childrenNodes[i]);
-//        }
-//    }
-//
-//    return newIfNode;
-//}
+
 
 // converts CST expStmt to an expression node.
 //AstNode* addExprNodeToAST(CstNode* cstExprStmt) {
@@ -699,6 +639,26 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt) {
     return newStmtSeqNode;
 }
 
+//Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
+//    std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
+//
+//    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
+//
+//    for (int i = 0; i < childrenNodes.size(); i++) {
+//        if (i == 2) {
+//            newIfNode->ifNode.condition = addExprTreeToAST(childrenNodes[i])->data.expr;
+//        }
+//        else if (i == 4) {
+//            newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[i]);
+//        }
+//        else if (i == 6) {
+//            newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[i]);
+//        }
+//    }
+//
+//    return newIfNode;
+//}
+
 
 
 // deals with a stmt grammar expression.
@@ -717,7 +677,7 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
     }
     else if (stmtType == "selectStmt") {
         // add later...
-        //return addIfNodeToAST(specificStmt);
+        //return createIfNodeAST(specificStmt);
 
     }
     else if (stmtType == "iterStmt") {
@@ -736,8 +696,10 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
 // can this logic be merged with the previous function?
 std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector) {
     std::cout << "stmt List" << std::endl;
+    std::cout << stmtList->val << std::endl;
     std::vector<CstNode*> childrenNodes = stmtList->childrenNodes;
     if (childrenNodes.size() == 1) { // at dead end...
+        std::cout << childrenNodes[0]->val << std::endl;
         std::cout << "termination" << std::endl;
         return smtASTNodeVector;
     }
@@ -759,7 +721,8 @@ std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtAST
 
 Stmt* createAST(CstNode* cstRootNode) {
     // currently first node is always a compoundStmt node.
-    return createStmtSeqNodeAST(cstRootNode);
+    Stmt* rootNode = createStmtSeqNodeAST(cstRootNode);
+    return rootNode;
 }
 
 CstNode* createCstNode(std::string e) {
@@ -798,7 +761,8 @@ void defineLanguageGrammar() {
 
     patternList["unaryRelExp"] = { {"relExp"}, {"_not", "unaryRelExp"} };
 
-    patternList["relExp"] = { {"sumExp", "relOp", "sumExp"}, {"sumExp"} };
+    patternList["relExp"] = { {"sumExp", "relExp*"}};
+    patternList["relExp*"] = { {"relOp", "sumExp"}, {"E"}};
     patternList["relOp"] = { {"_lessthanequal"}, {"_lessthan"}, {"_greaterthan"}, {"_greaterthanequal"}, {"_equal"}, {"_notequal"} };
 
     patternList["sumExp"] = { {"mulExp", "sumExp*"} };
@@ -1011,7 +975,7 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
 
     if (debugMode == true) {
         for (int i = 0; i < tokenList.size(); i++) {
-            //std::cout << tokenList[i].type << " : "<< tokenList[i].val <<std::endl;
+            std::cout << tokenList[i].type;
             // needs re-writing to take values into account
         }
     }
@@ -1100,8 +1064,10 @@ int main() {
 
 
     std::cout << "Tokenizing Source Code... [";
-    tokenStream = tokenize(contents, true);
+    tokenStream = tokenize(contents, false);
     std::cout << "DONE]" << std::endl;
+
+    
 
     std::cout << "Generating CST... [";
     CstNode* cstRootNode = generateCST(debugMode);
