@@ -63,7 +63,9 @@ enum class Statement {
     IF_NODE,
     WHILE_NODE,
     STMT_NODE,
-    STMTSEQ_NODE
+    STMTSEQ_NODE,
+    RET_NODE,
+    BREAK_NODE,
 };
 
 enum class OpCode {
@@ -263,6 +265,15 @@ class Stmt {
                 std::vector<int> numbers;
                 std::vector<Stmt*> stmts;
             } seqNode;
+
+            struct {
+                bool operandPresent = false;
+                union {
+                    VarNode* var;
+                    ExprNode* expr;
+                    NumConstNode* num;
+                } operand;
+            } retNode;
             
         };
         Stmt(Statement stmtType);
@@ -657,6 +668,42 @@ Stmt* createWhileNodeToAST(CstNode* cstIterStmt) {
     return newWhileNode;
 }
 
+// creates AST return node from CST node.
+Stmt* createReturnNodeAST(CstNode* cstRetStmt) {
+    std::cout << "============= creating return node =============" << std::endl;
+    std::vector<CstNode*> childrenNodes = cstRetStmt->childrenNodes;
+
+    Stmt* newRetNode = new Stmt(Statement::RET_NODE);
+
+    if (childrenNodes.size() == 3) {
+        newRetNode->retNode.operandPresent = true;
+
+        NumVarExpr* operand = addExprTreeToAST(childrenNodes[1]);
+
+        switch (operand->type) {
+            case Operand::VAR_NODE: {
+                newRetNode->retNode.operand.var = operand->data.var;
+            }
+            case Operand::EXPR_NODE: {
+                newRetNode->retNode.operand.expr = operand->data.expr;
+            }
+            case Operand::NUMCONST_NODE: {
+                newRetNode->retNode.operand.num = operand->data.numconst;
+            }
+        }
+
+    }
+    return newRetNode;
+}
+
+// creates AST break node from CST node.
+Stmt* createBreakNodeAST(CstNode* cstIterStmt) {
+    std::cout << "============= creating break node =============" << std::endl;
+    Stmt* newBreakNode = new Stmt(Statement::BREAK_NODE);
+    return newBreakNode;
+}
+
+
 
 // deals with a stmt grammar expression.
 Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
@@ -681,10 +728,10 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
 
     }
     else if (stmtType == "returnStmt") {
-        // add later...
+        return createReturnNodeAST(specificStmt);
     }
     else if (stmtType == "breakStmt") {
-        // add later...
+        return createBreakNodeAST(specificStmt);
     }
 }
 
@@ -712,7 +759,6 @@ std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtAST
 
     }
 }
-
 
 Stmt* createAST(CstNode* cstRootNode) {
     // currently first node is always a compoundStmt node.
@@ -743,7 +789,10 @@ void defineLanguageGrammar() {
     patternList["selectStmt"] = { {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt", "_else", "compoundStmt"}, {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt"},};
 
     patternList["iterStmt"] = { {"_while", "_openbracket", "simpleExp", "_closebracket", "compoundStmt"} };
-    patternList["returnStmt"] = { {"_return", "_semi"}, {"_return", "exp", "_semi"} };
+    
+    // original definitions had exp instead of simpleExp, idk why though.
+    patternList["returnStmt"] = { {"_return", "_semi"}, {"_return", "simpleExp", "_semi"} };
+
     patternList["breakStmt"] = { {"_break", "_semi"} };
 
     patternList["exp"] = { {"_ID", "_assign", "exp"}, {"simpleExp"} };
