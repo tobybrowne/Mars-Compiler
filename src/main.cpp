@@ -272,7 +272,7 @@ class Stmt {
 Stmt::Stmt(Statement stmtType): type(stmtType) {
     switch (stmtType) {
         case Statement::STMTSEQ_NODE: {
-            new (&seqNode.numbers) std::vector<Stmt*>();
+            new (&seqNode.stmts) std::vector<Stmt*>();
             break;
         }
     }
@@ -281,7 +281,7 @@ Stmt::Stmt(Statement stmtType): type(stmtType) {
 Stmt::~Stmt() {
     switch (type) {
         case Statement::STMTSEQ_NODE: {
-            delete (&seqNode.numbers);
+            delete (&seqNode.stmts);
             break;
         }
     }
@@ -405,16 +405,8 @@ OpCode findOpcode(CstNode* cstExprNode) {
 }
 
 NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
-    std::cout << "starting express tree stuff" << std::endl;
     std::string expressionType = cstExpr->val;
     std::cout << expressionType << std::endl;
-    /*bool inUse = expressionInUse(cstExpr);
-    if (inUse) {
-        std::cout << "true" << std::endl;
-    }
-    else {
-        std::cout << "false" << std::endl;
-    }*/
     std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
 
     if (expressionType == "factor") {
@@ -425,14 +417,9 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
         std::cout << "gutentag" << std::endl;
 
         if (factorType == "_NUMCONST") {
-            std::cout << "bonjour" << std::endl;
             NumVarExpr* newNumVarExpr = new NumVarExpr;
-            std::cout << "hi" << std::endl;
             newNumVarExpr->type = Operand::NUMCONST_NODE;
-            std::cout << "hello" << std::endl;
             newNumVarExpr->data.numconst = new NumConstNode(factorToken.numConstVal);
-            std::cout << "hola" << std::endl;
-
             return newNumVarExpr; 
         }
         else if (factorType == "_ID") {
@@ -635,7 +622,7 @@ std::vector<Stmt*> addDecListToAST(CstNode* decListCSTNode, std::vector<Stmt*> d
     std::cout << "making dec list" << std::endl;
     std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
     if (childrenNodes.size() == 1) { // at dead end...
-        return {};
+        return decASTNodeVector;
     }
     for (int i = 0; i < 2; i++) {
         if (i == 0) { // varDecl...
@@ -667,12 +654,9 @@ std::vector<Stmt*> addDecListToAST(CstNode* decListCSTNode, std::vector<Stmt*> d
 
             decASTNodeVector.push_back(newDeclNode);
 
-            return decASTNodeVector;
         }
         else { // further decList...
-            // proper nasty but required.
-            std::vector<Stmt*> newDecs = addDecListToAST(childrenNodes[i], decASTNodeVector);
-            decASTNodeVector.insert(decASTNodeVector.end(), newDecs.begin(), newDecs.end());
+            decASTNodeVector = addDecListToAST(childrenNodes[i], decASTNodeVector);
             return decASTNodeVector;
         }
     }
@@ -687,18 +671,10 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt) {
     std::vector<CstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
 
     Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
-
-    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
-
     
-    std::vector<Stmt*> decList = { newIfNode };
-    std::vector<Stmt*> stmtList = newStmtSeqNode->seqNode.stmts;
-
-    newStmtSeqNode->seqNode.stmts = decList;
-
-
-    
-
+    std::vector<Stmt*> decList;
+    std::vector<Stmt*> stmtList;
+   
     for (int i = 0; i < 4; i++) {
         // decList
         if (i == 1) {
@@ -714,7 +690,7 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt) {
         }
     }
 
-    //decList.insert(decList.end(), stmtList.begin(), stmtList.end());
+    decList.insert(decList.end(), stmtList.begin(), stmtList.end());
     std::cout << decList.size() << std::endl;
     std::cout << "heeey" << std::endl;
     newStmtSeqNode->seqNode.stmts = decList;
@@ -763,19 +739,17 @@ std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtAST
     std::vector<CstNode*> childrenNodes = stmtList->childrenNodes;
     if (childrenNodes.size() == 1) { // at dead end...
         std::cout << "termination" << std::endl;
-        return {};
+        return smtASTNodeVector;
     }
     for (int i = 0; i < 2; i++) {
         if (i == 0) { // stmtDecl...
             
             smtASTNodeVector.push_back(createStmtNodeAST(childrenNodes[i]));
-            return smtASTNodeVector;
 
         }
         else { // further stmtList...
             
-            std::vector<Stmt*> newStmts = addStmtListToAST(childrenNodes[i], smtASTNodeVector);
-            smtASTNodeVector.insert(smtASTNodeVector.end(), newStmts.begin(), newStmts.end());
+            smtASTNodeVector = addStmtListToAST(childrenNodes[i], smtASTNodeVector);
             return smtASTNodeVector;
         }
 
@@ -784,15 +758,6 @@ std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtAST
 
 
 Stmt* createAST(CstNode* cstRootNode) {
-    Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
-
-    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
-    newStmtSeqNode->seqNode.numbers.push_back(4);
-
-    std::vector<Stmt*> decList = { newIfNode };
-    std::vector<Stmt*> stmtList = newStmtSeqNode->seqNode.stmts;
-
-    newStmtSeqNode->seqNode.stmts = decList;
     // currently first node is always a compoundStmt node.
     return createStmtSeqNodeAST(cstRootNode);
 }
@@ -1151,6 +1116,8 @@ int main() {
     std::cout << "Generating AST..." << std::endl;
     Stmt* astRootNode = createAST(cstRootNode);
     std::cout << "DONE" << std::endl;
+
+    getchar();
 
     //std::cout << countNodes(cstRootNode) << std::endl;
     return 0; 
