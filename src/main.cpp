@@ -24,6 +24,8 @@ struct Token {
     int numConstVal;
 };
 
+std::vector<Token> tokenStream;
+
 // struct CstNode;
 
 class CstNode {
@@ -62,79 +64,31 @@ enum class Statement {
     DECL_NODE,
     IF_NODE,
     WHILE_NODE,
-    STMT_NODE
+    STMT_NODE,
+    STMTSEQ_NODE
 };
 
 enum class OpCode {
     ADD,
     SUB,
     DIV,
+    MUL,
     LE,
     LT,
     GE,
-    GT
+    GT,
+    EQ,
+    NEQ,
+    AND,
+    OR,
+    NOT
 };
 
 class VarNode {
     public:
         std::string name;
-    VarNode();
-    VarNode(const std::string& varName);
-};
-
-class NumConstNode {
-    public:
-        int val;
-    NumConstNode();
-    NumConstNode(int val);
-};
-
-class ExprNode {
-    public:
-        OpCode opcode;
-        Operand aType;
-        Operand bType;
-        union a {
-            VarNode *var;
-            ExprNode *expr;
-            NumConstNode *num;
-        } a;
-        union b {
-            VarNode *var;
-            ExprNode *expr;
-            NumConstNode *num;
-        } b;
-        ExprNode();
-        ExprNode(OpCode opcode, Operand aType, Operand bType);
-        ~ExprNode();
-};
-
-class DeclNode {
-    public:
-        VarNode variable;
-        Operand initType;
-        union { 
-            VarNode var;
-            ExprNode expr;
-            NumConstNode num;
-        } init;
-};
-
-class Stmt {
-    public:
-        Statement type;
-        union node {
-            struct {
-                ExprNode condition;
-                Stmt *ifBody;
-                Stmt *elseBody;
-            } ifNode;
-            struct {
-                ExprNode condition;
-                Stmt *whileBody;
-            } whileNode;
-            std::vector<Stmt*> seq;
-        };
+        VarNode();
+        VarNode(const std::string& varName);
 };
 
 VarNode::VarNode(const std::string& varName)
@@ -142,86 +96,186 @@ VarNode::VarNode(const std::string& varName)
     name = std::string(varName);
 }
 
-NumConstNode::NumConstNode(int val): val(val)
+VarNode::VarNode()
+{
+}
+
+class NumConstNode {
+    public:
+        int val;
+        NumConstNode();
+        NumConstNode(int val);
+};
+
+NumConstNode::NumConstNode(int val) : val(val)
 {
 
 }
 
-ExprNode::ExprNode(OpCode opcode, Operand aType, Operand bType): opcode(opcode), aType(aType), bType(bType)
+NumConstNode::NumConstNode()
+{
+}
+
+// only used as a medium to return data from specific functions.
+// this way the classes stay type-safe, only storing one of the three operand types, but the code is much nicer.
+
+
+class ExprNode {
+public:
+    OpCode opcode;
+    Operand aType;
+    Operand bType;
+    union a {
+        VarNode* var;
+        ExprNode* expr;
+        NumConstNode* num;
+    } a;
+    union b {
+        VarNode* var;
+        ExprNode* expr;
+        NumConstNode* num;
+    } b;
+    ExprNode();
+    ExprNode(OpCode opcode, Operand aType, Operand bType);
+    ~ExprNode();
+};
+
+
+ExprNode::ExprNode(OpCode opcode, Operand aType, Operand bType) : opcode(opcode), aType(aType), bType(bType)
 {
     switch (aType) {
-        case Operand::VAR_NODE:
-        {
-            a.var = new VarNode;
-            break;
-        }
-        case Operand::EXPR_NODE:
-        {
-            a.expr = new ExprNode;
-            break;
-        }
-        case Operand::NUMCONST_NODE:
-        {
-            a.num = new NumConstNode;
-            break;
-        }
+    case Operand::VAR_NODE:
+    {
+        a.var = new VarNode;
+        break;
+    }
+    case Operand::EXPR_NODE:
+    {
+        a.expr = new ExprNode;
+        break;
+    }
+    case Operand::NUMCONST_NODE:
+    {
+        a.num = new NumConstNode;
+        break;
+    }
     }
     switch (bType) {
-        case Operand::VAR_NODE:
-        {
-            b.var = new VarNode;
-            break;
-        }
-        case Operand::EXPR_NODE:
-        {
-            b.expr = new ExprNode;
-            break;
-        }
-        case Operand::NUMCONST_NODE:
-        {
-            b.num = new NumConstNode;
-            break;
-        }
+    case Operand::VAR_NODE:
+    {
+        b.var = new VarNode;
+        break;
     }
+    case Operand::EXPR_NODE:
+    {
+        b.expr = new ExprNode;
+        break;
+    }
+    case Operand::NUMCONST_NODE:
+    {
+        b.num = new NumConstNode;
+        break;
+    }
+    }
+}
+
+ExprNode::ExprNode() {
+
 }
 
 ExprNode::~ExprNode()
 {
     switch (aType) {
-        case Operand::VAR_NODE:
-        {
-            delete a.var;
-            break;
-        }
-        case Operand::EXPR_NODE:
-        {
-            delete a.expr;
-            break;
-        }
-        case Operand::NUMCONST_NODE:
-        {
-            delete a.num;
-            break;
-        }
+    case Operand::VAR_NODE:
+    {
+        delete a.var;
+        break;
+    }
+    case Operand::EXPR_NODE:
+    {
+        delete a.expr;
+        break;
+    }
+    case Operand::NUMCONST_NODE:
+    {
+        delete a.num;
+        break;
+    }
     }
     switch (bType) {
-        case Operand::VAR_NODE:
-        {
-            delete b.var;
-            break;
-        }
-        case Operand::EXPR_NODE:
-        {
-            delete b.expr;
-            break;
-        }
-        case Operand::NUMCONST_NODE:
-        {
-            delete b.num;
-            break;
-        }
+    case Operand::VAR_NODE:
+    {
+        delete b.var;
+        break;
+    }
+    case Operand::EXPR_NODE:
+    {
+        delete b.expr;
+        break;
+    }
+    case Operand::NUMCONST_NODE:
+    {
+        delete b.num;
+        break;
+    }
     }
 }
+
+class NumVarExpr {
+    public:
+        Operand type;
+        union {
+            NumConstNode* numconst;
+            VarNode* var;
+            ExprNode* expr;
+        } data;
+};
+
+
+
+
+
+// it would only be worth splitting up the statements if we had plans for some sort of type checking.
+class Stmt {
+    public:
+        Statement type;
+        union {
+            struct {
+                ExprNode* condition;
+                Stmt* ifBody;
+                Stmt* elseBody;
+            } ifNode;
+
+            struct {
+                ExprNode condition;
+                Stmt *whileBody;
+            } whileNode;
+
+            struct {
+                VarNode* variable;
+                Operand initType;
+                union {
+                    VarNode* var;
+                    ExprNode* expr;
+                    NumConstNode* num;
+                } init;
+            } declNode;
+
+            struct {
+                std::vector<int> numbers;
+                std::vector<Stmt*> stmts;
+            } seqNode;
+            
+        };
+        Stmt(Statement stmtType): type(stmtType) {
+            seqNode.numbers.push_back(1);
+        }
+};
+
+
+
+
+
 
 struct AstNode {
     Node type;
@@ -277,48 +331,13 @@ struct AstNode {
     }
 };
 
-AstNode* createExprNode(AstNode* operand1, AstNode* operand2, std::string opcode) {
-    std::cout << "making expr node" << std::endl;
-    AstNode* newExprNode = new AstNode(EXPR_NODE);
-    newExprNode->operand1 = operand1;
-    newExprNode->operand1 = operand2;
-    newExprNode->opcode = opcode;
-    return newExprNode;
-}
-
-AstNode* createNumConstNode(int a) {
-    std::cout << "making num const" << std::endl;
-    AstNode* newNumConstNode = new AstNode(NUMCONST_NODE);
-    newNumConstNode->val = a;
-    return newNumConstNode;
-}
-
-AstNode* createVarNode(std::string varName) {
-    std::cout << "making var node" << std::endl;
-    std::cout << varName << std::endl;
-    AstNode* newVarNode = new AstNode(VAR_NODE);
-    std::cout << "finished making var node" << std::endl;
-    newVarNode->name = varName;
-    std::cout << "finished making var node" << std::endl;
-    return newVarNode;
-}
-
-
-// searches the names of a list of cstNodes and returns the correct pointer.
-CstNode* findChildrenByName(std::vector<CstNode*> childNodes, std::string match) {
-    for (CstNode*& child : childNodes) {
-        if (child->val == match) {
-            return child;
-        }
-    }
-}
 
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
 // make sure this works with relExp.
 bool expressionInUse(CstNode* cstExprNode) {
     std::string expressionType = cstExprNode->val;
     // checking the children of expression* (make sure this index is correct)
-    if (((cstExprNode->childrenNodes)[1]->val).size() == 1) {
+    if (((cstExprNode->childrenNodes)[1])->childrenNodes.size() == 1) {
         return false;
     }
     else {
@@ -326,74 +345,316 @@ bool expressionInUse(CstNode* cstExprNode) {
     }
 }
 
-std::vector<Token> tokenStream;
+OpCode findOpcode(CstNode* cstExprNode) {
+    if (cstExprNode->childrenNodes[1]->childrenNodes[0]->tokenPresent) {
+        std::string opCodeString = cstExprNode->childrenNodes[1]->childrenNodes[0]->val;
 
-std::string findOpcode(CstNode* cstExprNode) {
-    if (cstExprNode->tokenPresent) {
-        return findOpcode((cstExprNode->childrenNodes[0]));
+        if (opCodeString == "_lessthan") {
+            return OpCode::LT;
+        }
+        else if (opCodeString == "_greaterthan") {
+            return OpCode::GT;
+        }
+        else if (opCodeString == "_lessthanequal") {
+            return OpCode::LE;
+        }
+        else if (opCodeString == "_greaterthanequal") {
+            return OpCode::GE;
+        }
+        else if (opCodeString == "_equal") {
+            return OpCode::EQ;
+        }
+        else if (opCodeString == "_notequal") {
+            return OpCode::NEQ;
+        }
+        else if (opCodeString == "_plus") {
+            return OpCode::ADD;
+        }
+        else if (opCodeString == "_subtract") {
+            return OpCode::SUB;
+        }
+        else if (opCodeString == "_multiply") {
+            return OpCode::MUL;
+        }
+        else if (opCodeString == "_divide") {
+            return OpCode::DIV;
+        }
+        else if (opCodeString == "_and") {
+            return OpCode::AND;
+        }
+        else if (opCodeString == "_or") {
+            return OpCode::OR;
+        }
+        else if (opCodeString == "_not") {
+            return OpCode::NOT;
+        }
     }
-    return cstExprNode->val;
+    else {
+        return findOpcode(cstExprNode->childrenNodes[0]);
+    }
+    
 }
 
-// converts CST simpleExp into a expression tree.
-AstNode* addExprTreeToAST(CstNode* cstSimpleExp) {
+NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
     std::cout << "starting express tree stuff" << std::endl;
-    std::string expressionType = cstSimpleExp->val;
-    std::vector<CstNode*> childrenNodes = cstSimpleExp->childrenNodes;
+    std::string expressionType = cstExpr->val;
+    std::cout << expressionType << std::endl;
+    /*bool inUse = expressionInUse(cstExpr);
+    if (inUse) {
+        std::cout << "true" << std::endl;
+    }
+    else {
+        std::cout << "false" << std::endl;
+    }*/
+    std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
 
     if (expressionType == "factor") {
         Token factorToken = childrenNodes[0]->token;
-        if (factorToken.type == "_NUMCONST") {
-            return createNumConstNode(factorToken.numConstVal); // numbers stored w strings _eeesh (use a union?)
+        std::string factorType = factorToken.type;
+
+        std::cout << "here: "<< factorType << std::endl;
+        std::cout << "gutentag" << std::endl;
+
+        if (factorType == "_NUMCONST") {
+            std::cout << "bonjour" << std::endl;
+            NumVarExpr* newNumVarExpr = new NumVarExpr;
+            std::cout << "hi" << std::endl;
+            newNumVarExpr->type = Operand::NUMCONST_NODE;
+            std::cout << "hello" << std::endl;
+            newNumVarExpr->data.numconst = new NumConstNode(factorToken.numConstVal);
+            std::cout << "hola" << std::endl;
+
+            return newNumVarExpr; 
         }
-        else if (factorToken.type == "_ID") {
-            return createVarNode(factorToken.varName); 
+        else if (factorType == "_ID") {
+
+            NumVarExpr* newNumVarExpr = new NumVarExpr;
+            newNumVarExpr->type = Operand::VAR_NODE;
+            newNumVarExpr->data.var = new VarNode(factorToken.varName);
+
+            return newNumVarExpr;
         }
 
     }
 
-    std::cout << "non terminal" << std::endl;
+    // need to figure out how a unaryRelExp will actually be made.
+    else if (expressionType == "unaryRelExp") { // has a different structure than others.
+        // if not in use...
+        std::cout << childrenNodes.size() << std::endl;
+        if (childrenNodes.size() == 1) {
+            return addExprTreeToAST(childrenNodes[0]);
+        }
+        else {
+            // do this later (unary rel exp is disabled for now)
+        }
+    }
 
-    if (expressionInUse(cstSimpleExp)) {
-        AstNode* operand1 = addExprTreeToAST(childrenNodes[0]);
-        AstNode* operand2 = addExprTreeToAST(childrenNodes[1]->childrenNodes[1]);
-        std::string opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
-        AstNode* newExprNode = createExprNode(operand1, operand2, opcode);
+    else if (expressionType == "relExp") {
+        // if not in use...
+        if (childrenNodes.size() == 1) {
+            return addExprTreeToAST(childrenNodes[0]);
+        }
+        else {
+            // do this later (rel exp is disabled for now)
+        }
+    }
 
-        return newExprNode;
+    else if (expressionInUse(cstExpr)) {
+        NumVarExpr* operand1 = addExprTreeToAST(childrenNodes[0]);
+        NumVarExpr* operand2 = addExprTreeToAST(childrenNodes[1]->childrenNodes[1]);
+
+        OpCode opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
+
+        ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
+
+        // nodes don't link to NumVarExpr types - just the actual operand type. 
+        switch (operand1->type) {
+            case Operand::VAR_NODE: {
+                newExprNode->a.var = operand1->data.var;
+            }
+            case Operand::EXPR_NODE: {
+                newExprNode->a.expr = operand1->data.expr;
+            }
+            case Operand::NUMCONST_NODE: {
+                newExprNode->a.num = operand1->data.numconst;
+            }
+        }
+
+        switch (operand2->type) {
+            case Operand::VAR_NODE: {
+                newExprNode->b.var = operand2->data.var;
+            }
+            case Operand::EXPR_NODE: {
+                newExprNode->b.expr = operand2->data.expr;
+            }
+            case Operand::NUMCONST_NODE: {
+                newExprNode->b.num = operand2->data.numconst;
+            }
+        }
+
+        NumVarExpr* newNumVarExpr = new NumVarExpr;
+        newNumVarExpr->type = Operand::EXPR_NODE;
+        newNumVarExpr->data.expr = newExprNode;
+
+        return newNumVarExpr;
     }
     else {
+        std::cout << "not in use" << std::endl;
         return addExprTreeToAST(childrenNodes[0]);
     }
 }
 
-// some nasty code is required to convert the recursive tree structure into a linear list of declarations.
-std::vector<AstNode*> addDecListToAST(CstNode* decListCSTNode, std::vector<AstNode*> decASTNodeVector) {
+// creates an AST expression tree from a CST expression node.
+//ExprNode* createExprTreeAST(CstNode* cstExpr) {
+//    // we can assume the expression is in use (it will only be called in this case).
+//    std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
+//    CstNode* cstRootOperands[2] = { childrenNodes[0], childrenNodes[1]->childrenNodes[1] };
+//    Operand operandTypes[2];
+//    OpCode opcode = findOpcode(cstExpr);
+//
+//    NumConstNode* nums[2];
+//    VarNode* vars[2];
+//    ExprNode* exprs[2];
+//
+//    bool validNodeReached = false;
+//
+//    ExprNode* newExprNode = new ExprNode();
+//
+//    for (int i = 0; i < 2; i++) {
+//        CstNode* cstOperand = cstRootOperands[i];
+//        validNodeReached = false;
+//        while (validNodeReached == false) {
+//            if (cstOperand->val == "factor") {
+//                std::string type = cstOperand->childrenNodes[0]->token.type;
+//                if (type == "_NUMCONST") {
+//                    operandTypes[i] = Operand::NUMCONST_NODE;
+//                    nums[i] = new NumConstNode(cstOperand->childrenNodes[0]->token.numConstVal);
+//                }
+//                else if (type == "_ID") {
+//                    operandTypes[i] = Operand::VAR_NODE;
+//                    vars[i] = new VarNode(cstOperand->childrenNodes[0]->token.varName);
+//                }
+//                validNodeReached = true;
+//            }
+//            else if (expressionInUse(cstOperand)) {
+//                exprs[i] = createExprTreeAST(cstOperand);
+//                operandTypes[i] = Operand::EXPR_NODE;
+//                validNodeReached = true;
+//            } 
+//        }
+//    }
+//
+//    newExprNode = new ExprNode(opcode, operandTypes[0], operandTypes[1]);
+//
+//    for (int i = 0; i < 2; i++) {
+//        switch (operandTypes[i]) {
+//            case Operand::VAR_NODE: {
+//                newExprNode->a.var = vars[i];
+//            }
+//            case Operand::EXPR_NODE: {
+//                newExprNode->a.expr = exprs[i];
+//            }
+//            case Operand::NUMCONST_NODE: {
+//                newExprNode->a.num = nums[i];
+//            }
+//        }
+//    }
+//
+//    return newExprNode;
+//}
+
+
+//AstNode* addWhileNodeToAST(CstNode* cstIterStmt) {
+//    std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
+//
+//    AstNode* newWhileNode = new AstNode(WHILE_NODE);
+//
+//    // can this be done without for loops.
+//    for (int i = 0; i < childrenNodes.size(); i++) {
+//        if (i == 2) {
+//            newWhileNode->condition = addExprTreeToAST(childrenNodes[i]);
+//        }
+//        else if (i == 4) {
+//            newWhileNode->body = addStmtSeqNodeToAST(childrenNodes[i]);
+//        }
+//    }
+//
+//    return newWhileNode;
+//}
+
+
+// converts CST selectStmt to AST ifNode
+//AstNode* createIfNodeAST(CstNode* cstSelectStmt) {
+//    std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
+//
+//    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
+//    newDeclNode->declNode.variable = new VarNode(idToken.varName);
+//
+//    for (int i = 0; i < childrenNodes.size(); i++) {
+//        if (i == 2) {
+//            newIfNode->condition = addExprTreeToAST(childrenNodes[i]);
+//        }
+//        else if (i == 4) {
+//            newIfNode->ifBody = addStmtSeqNodeToAST(childrenNodes[i]);
+//        }
+//        else if (i == 6) {
+//            newIfNode->elseBody = addStmtSeqNodeToAST(childrenNodes[i]);
+//        }
+//    }
+//
+//    return newIfNode;
+//}
+
+// converts CST expStmt to an expression node.
+//AstNode* addExprNodeToAST(CstNode* cstExprStmt) {
+//    // probably use a different name for childrenNodes.
+//    std::vector<CstNode*> childrenNodes = cstExprStmt->childrenNodes;
+//
+//    if (childrenNodes.size() == 3) { // exp part of grammar...
+//        AstNode* varNode = createVarNode(childrenNodes[0]->childrenNodes[0]->val);
+//        AstNode* operand2 = addExprNodeToAST(childrenNodes[0]->childrenNodes[2]);
+//        return createExprNode(varNode, operand2, "_assign");
+//    }
+//
+//    else if (childrenNodes[0]->val == "simpleExp") {
+//        return addExprTreeToAST(childrenNodes[0]);
+//    }
+//}
+
+
+std::vector<Stmt*> addDecListToAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector) {
     std::cout << "making dec list" << std::endl;
     std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
-    std::cout << childrenNodes.size() << std::endl;
     if (childrenNodes.size() == 1) { // at dead end...
         return {};
     }
     for (int i = 0; i < 2; i++) {
         if (i == 0) { // varDecl...
-            std::cout << "making var decl" << std::endl;
+            std::cout << "============ making var decl ============" << std::endl;
             CstNode* varDeclNode = childrenNodes[0];
             Token idToken = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token;
-            std::cout << "hola" << std::endl;
 
             CstNode* simpleExp = (varDeclNode->childrenNodes)[1]->childrenNodes[2];
 
-            
+            Stmt* newDeclNode = new Stmt(Statement::DECL_NODE);
+            newDeclNode->declNode.variable = new VarNode(idToken.varName);
 
-            AstNode* newDeclNode = new AstNode(DECL_NODE);
+            NumVarExpr* init = addExprTreeToAST(simpleExp);
+            Operand initType = init->type;
 
-            newDeclNode->variable = createVarNode(idToken.varName);
+            newDeclNode->declNode.initType = initType;
 
-            std::cout << "hiya" << std::endl;
-
-
-            newDeclNode->init = addExprTreeToAST(simpleExp);
+            switch (initType) {
+                case Operand::VAR_NODE: {
+                    newDeclNode->declNode.init.var = init->data.var;
+                }
+                case Operand::EXPR_NODE: {
+                    newDeclNode->declNode.init.expr = init->data.expr;
+                }
+                case Operand::NUMCONST_NODE: {
+                    newDeclNode->declNode.init.num = init->data.numconst;
+                }
+            }
 
             decASTNodeVector.push_back(newDeclNode);
 
@@ -401,116 +662,82 @@ std::vector<AstNode*> addDecListToAST(CstNode* decListCSTNode, std::vector<AstNo
         }
         else { // further decList...
             // proper nasty but required.
-            std::vector<AstNode*> newDecs = addDecListToAST(childrenNodes[i], decASTNodeVector);
+            std::vector<Stmt*> newDecs = addDecListToAST(childrenNodes[i], decASTNodeVector);
             decASTNodeVector.insert(decASTNodeVector.end(), newDecs.begin(), newDecs.end());
             return decASTNodeVector;
-
         }
-
     }
 }
 
-// converts CST expStmt to an expression node.
-AstNode* addExprNodeToAST(CstNode* cstExprStmt) {
-    // probably use a different name for childrenNodes.
-    std::vector<CstNode*> childrenNodes = cstExprStmt->childrenNodes;
 
-    if (childrenNodes.size() == 3) { // exp part of grammar...
-        AstNode* varNode = createVarNode(childrenNodes[0]->childrenNodes[0]->val);
-        AstNode* operand2 = addExprNodeToAST(childrenNodes[0]->childrenNodes[2]);
-        return createExprNode(varNode, operand2, "_assign");
-    }
-
-    else if (childrenNodes[0]->val == "simpleExp") {
-        return addExprTreeToAST(childrenNodes[0]);
-    }
-}
-
-// forward definition required to manage mutual recursion.
-std::vector<AstNode*> addStmtListToAST(CstNode* stmtList, std::vector<AstNode*> smtASTNodeVector);
+std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector);
 
 // converts CST cmpdStmt to AST stmtSeqNode
-AstNode* addStmtSeqNodeToAST(CstNode* cstCompoundStmt) {
+Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt) {
     std::cout << "making statement sequence" << std::endl;
     std::vector<CstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
 
-    AstNode* newStmtSeqNode = new AstNode(STMTSEQ_NODE);
+    Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
+
+    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
+
+    
+    std::vector<Stmt*> decList = { newIfNode };
+    std::vector<Stmt*> stmtList = newStmtSeqNode->seqNode.stmts;
+
+    newStmtSeqNode->seqNode.stmts = decList;
+
+
+    
 
     for (int i = 0; i < 4; i++) {
         // decList
         if (i == 1) {
-            newStmtSeqNode->stmts = addDecListToAST(childrenNodes[1], {});
+            decList = addDecListToAST(childrenNodes[1], {});
+            std::cout << decList.size() << std::endl;
             std::cout << "finished declist stuff" << std::endl;
         }
         // stmtList
         else if (i == 2) {
             std::cout << "starting stmtList stuff" << std::endl;
-            newStmtSeqNode->stmts = addStmtListToAST(childrenNodes[i], {});
+            stmtList = addStmtListToAST(childrenNodes[i], {});
+            std::cout << "finish stmtList stuff" << std::endl;
         }
     }
+
+    //decList.insert(decList.end(), stmtList.begin(), stmtList.end());
+    std::cout << decList.size() << std::endl;
+    std::cout << "heeey" << std::endl;
+    newStmtSeqNode->seqNode.stmts = decList;
+    std::cout << "heeey1" << std::endl;
 
     return newStmtSeqNode;
 }
 
-AstNode* addWhileNodeToAST(CstNode* cstIterStmt) {
-    std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
 
-    AstNode* newWhileNode = new AstNode(WHILE_NODE);
-
-    // can this be done without for loops.
-    for (int i = 0; i < childrenNodes.size(); i++) {
-        if (i == 2) {
-            newWhileNode->condition = addExprTreeToAST(childrenNodes[i]);
-        }
-        else if (i == 4) {
-            newWhileNode->body = addStmtSeqNodeToAST(childrenNodes[i]);
-        }
-    }
-
-    return newWhileNode;
-}
-
-
-// converts CST selectStmt to AST ifNode
-AstNode* addIfNodeToAST(CstNode* cstSelectStmt) {
-    std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
-
-    AstNode* newIfNode = new AstNode(IF_NODE);
-
-    for (int i = 0; i < childrenNodes.size(); i++) {
-        if (i == 2) {
-            newIfNode->condition = addExprTreeToAST(childrenNodes[i]);
-        }
-        else if (i == 4) {
-            newIfNode->ifBody = addStmtSeqNodeToAST(childrenNodes[i]);
-        }
-        else if (i == 6) {
-            newIfNode->elseBody = addStmtSeqNodeToAST(childrenNodes[i]);
-        }
-    }
-
-    return newIfNode;
-}
 
 // deals with a stmt grammar expression.
-AstNode* addStmtNodeToAST(CstNode* stmtNodeAST) {
+Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
     CstNode* specificStmt = stmtNodeAST->childrenNodes[0];
     std::string stmtType = specificStmt->val;
 
     // switch doesn't work with strings :(
     if (stmtType == "expStmt") {
-        return addExprNodeToAST(specificStmt);
+        // add later...
+        /*return addExprNodeToAST(specificStmt);*/
     }
     else if (stmtType == "compoundStmt") {
-        return addStmtSeqNodeToAST(specificStmt);
+        return createStmtSeqNodeAST(specificStmt);
 
     }
     else if (stmtType == "selectStmt") {
-        return addIfNodeToAST(specificStmt);
+        // add later...
+        //return addIfNodeToAST(specificStmt);
 
     }
     else if (stmtType == "iterStmt") {
-        return addWhileNodeToAST(specificStmt);
+        // add later...
+        //return addWhileNodeToAST(specificStmt);
 
     }
     else if (stmtType == "returnStmt") {
@@ -522,22 +749,23 @@ AstNode* addStmtNodeToAST(CstNode* stmtNodeAST) {
 }
 
 // can this logic be merged with the previous function?
-std::vector<AstNode*> addStmtListToAST(CstNode* stmtList, std::vector<AstNode*> smtASTNodeVector) {
+std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector) {
     std::cout << "stmt List" << std::endl;
     std::vector<CstNode*> childrenNodes = stmtList->childrenNodes;
     if (childrenNodes.size() == 1) { // at dead end...
+        std::cout << "termination" << std::endl;
         return {};
     }
     for (int i = 0; i < 2; i++) {
         if (i == 0) { // stmtDecl...
             
-            smtASTNodeVector.push_back(addStmtNodeToAST(childrenNodes[i]));
+            smtASTNodeVector.push_back(createStmtNodeAST(childrenNodes[i]));
             return smtASTNodeVector;
 
         }
         else { // further stmtList...
             
-            std::vector<AstNode*> newStmts = addStmtListToAST(childrenNodes[i], smtASTNodeVector);
+            std::vector<Stmt*> newStmts = addStmtListToAST(childrenNodes[i], smtASTNodeVector);
             smtASTNodeVector.insert(smtASTNodeVector.end(), newStmts.begin(), newStmts.end());
             return smtASTNodeVector;
         }
@@ -546,9 +774,18 @@ std::vector<AstNode*> addStmtListToAST(CstNode* stmtList, std::vector<AstNode*> 
 }
 
 
-AstNode* createAST(CstNode* cstRootNode) {
+Stmt* createAST(CstNode* cstRootNode) {
+    Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
+
+    Stmt* newIfNode = new Stmt(Statement::IF_NODE);
+    newStmtSeqNode->seqNode.numbers.push_back(4);
+
+    std::vector<Stmt*> decList = { newIfNode };
+    std::vector<Stmt*> stmtList = newStmtSeqNode->seqNode.stmts;
+
+    newStmtSeqNode->seqNode.stmts = decList;
     // currently first node is always a compoundStmt node.
-    return addStmtSeqNodeToAST(cstRootNode);
+    return createStmtSeqNodeAST(cstRootNode);
 }
 
 CstNode* createCstNode(std::string e) {
@@ -884,6 +1121,8 @@ int main() {
     } // file doesn't need to be closed because it is defined in it's own scope and has a pre-made destructor
     std::cout << "DONE]" << std::endl;
 
+    std::cout << contents << std::endl;
+
 
     std::cout << "Tokenizing Source Code... [";
     tokenStream = tokenize(contents, true);
@@ -900,7 +1139,7 @@ int main() {
 
 
     std::cout << "Generating AST..." << std::endl;
-    AstNode* astRootNode = createAST(cstRootNode);
+    Stmt* astRootNode = createAST(cstRootNode);
     std::cout << "DONE" << std::endl;
 
 
