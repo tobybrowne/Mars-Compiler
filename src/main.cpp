@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <cstring>
+#include <cassert>
 
 // for now we're defining our source code as a variable - later we can parse it as a parameter to the compiler.
 std::string source_code = "C://Users//toby//Documents//Mars//test.clite";
@@ -26,8 +27,6 @@ struct Token {
 
 std::vector<Token> tokenStream;
 
-// struct CstNode;
-
 class CstNode {
     public:
         std::string val;
@@ -35,7 +34,6 @@ class CstNode {
         bool tokenPresent = false;
         Token token;
 };
-
 
 // AST Nodes:
 
@@ -267,70 +265,81 @@ class Stmt {
             } seqNode;
             
         };
-        Stmt(Statement stmtType): type(stmtType) {
-            seqNode.numbers.push_back(1);
+        Stmt(Statement stmtType);
+        ~Stmt();
+};
+
+Stmt::Stmt(Statement stmtType): type(stmtType) {
+    switch (stmtType) {
+        case Statement::STMTSEQ_NODE: {
+            new (&seqNode.numbers) std::vector<Stmt*>();
+            break;
         }
-};
-
-
-
-
-
-
-struct AstNode {
-    Node type;
-    union {
-        //ifNode
-        struct {
-            AstNode* condition; // exprNode
-            AstNode* ifBody; // stmtSeqNode
-            AstNode* elseBody;
-        };
-
-        //whileNode
-        struct {
-            AstNode* condition;
-            AstNode* body;
-        };
-
-        //varNode
-        struct {
-            // remember a variable has no attribute val!
-            std::string name;
-        };
-
-        //numConstNode
-        struct {
-            int val;
-        };
-
-        //exprNode
-        struct {
-            // give operand node another go.
-            AstNode* operand1;
-            std::string opcode;
-            AstNode* operand2;
-        };
-
-        //declNode
-        struct {
-            AstNode* variable;
-            AstNode* init;
-        };
-
-        //stmtSeqNode
-        struct {
-            std::vector<AstNode*> stmts;
-        };
-    };
-
-    // include type assignment
-    AstNode(Node nodeTypeInput) {
-        std::memset(this, 0, sizeof(AstNode));
-        type = nodeTypeInput;
     }
-};
+}
 
+Stmt::~Stmt() {
+    switch (type) {
+        case Statement::STMTSEQ_NODE: {
+            delete (&seqNode.numbers);
+            break;
+        }
+    }
+}
+
+// struct AstNode {
+//     Node type;
+//     union {
+//         //ifNode
+//         struct {
+//             AstNode* condition; // exprNode
+//             AstNode* ifBody; // stmtSeqNode
+//             AstNode* elseBody;
+//         };
+//
+//         //whileNode
+//         struct {
+//             AstNode* condition;
+//             AstNode* body;
+//         };
+//
+//         //varNode
+//         struct {
+//             // remember a variable has no attribute val!
+//             std::string name;
+//         };
+//
+//         //numConstNode
+//         struct {
+//             int val;
+//         };
+//
+//         //exprNode
+//         struct {
+//             // give operand node another go.
+//             AstNode* operand1;
+//             std::string opcode;
+//             AstNode* operand2;
+//         };
+//
+//         //declNode
+//         struct {
+//             AstNode* variable;
+//             AstNode* init;
+//         };
+//
+//         //stmtSeqNode
+//         struct {
+//             std::vector<AstNode*> stmts;
+//         };
+//     };
+//
+//     // include type assignment
+//     AstNode(Node nodeTypeInput) {
+//         std::memset(this, 0, sizeof(AstNode));
+//         type = nodeTypeInput;
+//     }
+// };
 
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
 // make sure this works with relExp.
@@ -1073,6 +1082,7 @@ bool validPattern(std::vector<std::string> pattern, CstNode* rootTreeNode, bool 
             }
         }
         else {
+            assert(inputPtr < tokenStream.size());
             newTreeNode->token = tokenStream[inputPtr];
             newTreeNode->tokenPresent = true;
 
@@ -1141,11 +1151,6 @@ int main() {
     std::cout << "Generating AST..." << std::endl;
     Stmt* astRootNode = createAST(cstRootNode);
     std::cout << "DONE" << std::endl;
-
-
-
-
-    
 
     //std::cout << countNodes(cstRootNode) << std::endl;
     return 0; 
