@@ -7,17 +7,89 @@
 #include <set>
 #include <cstring>
 #include <cassert>
+#include <variant>
+
+
 
 // for now we're defining our source code as a variable - later we can parse it as a parameter to the compiler.
 std::string source_code = "C://Users//toby//Documents//Mars//test.clite";
-std::set<std::string> tokens = { "_if", "_else", "_while", "_return", "_break", "_int", "_ID", "_NUMCONST", "_lessthanequal", "_lessthan", "_greaterthan", "_greaterthanequal", "_equal", "_notequal", "_plus", "_subtract", "_multiply", "_divide", "_semi", "_opencurly", "_closecurly", "_openbracket", "_closebracket", "_assign", "_and", "_or", "_not", "E" };
-std::map<std::string, std::vector<std::vector<std::string>>> patternList;
+
+
+
+
+enum class CstNonTerminal {
+    STMT,
+    EXP_STMT,
+    COMPOUND_STMT,
+    SELECT_STMT,
+    ITER_STMT,
+    RETURN_STMT,
+    BREAK_STMT,
+    EXP,
+    DEC_LIST,
+    STMT_LIST,
+    VAR_DECL,
+    TYPESPEC,
+    VAR_DECL_INIT,
+    SIMPLE_EXP,
+    SIMPLE_EXP__,
+    AND_EXP,
+    AND_EXP__,
+    UNARY_REL_EXP,
+    REL_EXP,
+    REL_EXP__,
+    REL_OP,
+    SUM_EXP,
+    SUM_EXP__,
+    SUM_OP,
+    MUL_EXP,
+    MUL_EXP__,
+    MUL_OP,
+    FACTOR,
+    NULL_NONTERMINAL // to deal with undefined parameters.
+};
+
+
+
+// starting underscores indicate tokens, nothing else should have them.
+enum class TokenType {
+    _IF,
+    _ELSE,
+    _WHILE,
+    _RETURN,
+    _BREAK,
+    _INT,
+    _ID,
+    _NUMCONST,
+    _LE,
+    _LT,
+    _GT,
+    _GE,
+    _EQUAL,
+    _NOTEQUAL,
+    _ADD,
+    _SUB,
+    _MUL,
+    _DIV,
+    _SEMI,
+    _OPENCURLY,
+    _CLOSECURLY,
+    _OPENBRACK,
+    _CLOSEBRACK,
+    _ASSIGN,
+    _AND,
+    _OR,
+    _NOT,
+    _E,
+    NULL_TOKEN, // for undefined parameters
+};
+
 
 int inputPtr = 0;
 
 // add position of the token in the code to the object
 struct Token {
-    std::string type;
+    TokenType type;
 
     // only one can be true at a time so use a union to save memory?!?
     // using a union throws some stupid constructor errors that need to be resolved.
@@ -29,11 +101,17 @@ std::vector<Token> tokenStream;
 
 class CstNode {
     public:
-        std::string val;
+        union {
+            CstNonTerminal nonTerm;
+            TokenType token;
+        } val;
+        
         std::vector<CstNode*> childrenNodes;
-        bool tokenPresent = false;
+        bool isToken = false;
         Token token;
 };
+
+std::map<CstNonTerminal, std::vector<std::vector<std::variant<TokenType, CstNonTerminal>>>> patternList;
 
 // AST Nodes:
 
@@ -68,6 +146,7 @@ enum class Statement {
     BREAK_NODE,
 };
 
+// Don't conflate with token types, crossover but different.
 enum class OpCode {
     ADD,
     SUB,
@@ -77,8 +156,8 @@ enum class OpCode {
     LT,
     GE,
     GT,
-    EQ,
-    NEQ,
+    EQUAL,
+    NOTEQUAL,
     AND,
     OR,
     NOT
@@ -122,7 +201,7 @@ NumConstNode::NumConstNode()
 
 class ExprNode {
 public:
-    OpCode opcode;
+    TokenType opcode; // use OpCode class instead for further validation?
     Operand aType;
     Operand bType;
     union a {
@@ -136,12 +215,12 @@ public:
         NumConstNode* num;
     } b;
     ExprNode();
-    ExprNode(OpCode opcode, Operand aType, Operand bType);
+    ExprNode(TokenType opcode, Operand aType, Operand bType);
     ~ExprNode();
 };
 
 
-ExprNode::ExprNode(OpCode opcode, Operand aType, Operand bType) : opcode(opcode), aType(aType), bType(bType)
+ExprNode::ExprNode(TokenType opcode, Operand aType, Operand bType) : opcode(opcode), aType(aType), bType(bType)
 {
     switch (aType) {
     case Operand::VAR_NODE:
@@ -301,7 +380,6 @@ Stmt::~Stmt() {
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
 // make sure this works with relExp.
 bool expressionInUse(CstNode* cstExprNode) {
-    std::string expressionType = cstExprNode->val;
     // checking the children of expression* (make sure this index is correct)
     if (((cstExprNode->childrenNodes)[1])->childrenNodes.size() == 1) {
         return false;
@@ -312,49 +390,10 @@ bool expressionInUse(CstNode* cstExprNode) {
 }
 
 // this is required because sometimes the opcode has a parent node like "relOp", sometimes it does not.
-OpCode findOpcode(CstNode* cstExprNode) {
+TokenType findOpcode(CstNode* cstExprNode) {
 
-    if (cstExprNode->tokenPresent) {
-        std::string opCodeString = cstExprNode->val;
-        if (opCodeString == "_lessthan") {
-            return OpCode::LT;
-        }
-        else if (opCodeString == "_greaterthan") {
-            return OpCode::GT;
-        }
-        else if (opCodeString == "_lessthanequal") {
-            return OpCode::LE;
-        }
-        else if (opCodeString == "_greaterthanequal") {
-            return OpCode::GE;
-        }
-        else if (opCodeString == "_equal") {
-            return OpCode::EQ;
-        }
-        else if (opCodeString == "_notequal") {
-            return OpCode::NEQ;
-        }
-        else if (opCodeString == "_plus") {
-            return OpCode::ADD;
-        }
-        else if (opCodeString == "_subtract") {
-            return OpCode::SUB;
-        }
-        else if (opCodeString == "_multiply") {
-            return OpCode::MUL;
-        }
-        else if (opCodeString == "_divide") {
-            return OpCode::DIV;
-        }
-        else if (opCodeString == "_and") {
-            return OpCode::AND;
-        }
-        else if (opCodeString == "_or") {
-            return OpCode::OR;
-        }
-        else if (opCodeString == "_not") {
-            return OpCode::NOT;
-        }
+    if (cstExprNode->isToken) {
+        TokenType opCodeToken = cstExprNode->val.token;
     }
     else {
         return findOpcode(cstExprNode->childrenNodes[0]);
@@ -362,25 +401,22 @@ OpCode findOpcode(CstNode* cstExprNode) {
 }
 
 NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
-    std::string expressionType = cstExpr->val;
-    std::cout << expressionType << std::endl;
+    CstNonTerminal expressionType = cstExpr->val.nonTerm;
     std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
 
-    if (expressionType == "factor") {
+    if (expressionType == CstNonTerminal::FACTOR) {
         Token factorToken = childrenNodes[0]->token;
-        std::string factorType = factorToken.type;
+        TokenType factorType = factorToken.type;
 
-        std::cout << "here: " << factorType << std::endl;
-        std::cout << "gutentag" << std::endl;
 
-        if (factorType == "_NUMCONST") {
+        if (factorType == TokenType::_NUMCONST) {
             NumVarExpr* newNumVarExpr = new NumVarExpr;
             newNumVarExpr->type = Operand::NUMCONST_NODE;
             newNumVarExpr->data.numconst = new NumConstNode(factorToken.numConstVal);
             std::cout << "heya" << std::endl;
             return newNumVarExpr;
         }
-        else if (factorType == "_ID") {
+        else if (factorType == TokenType::_ID) {
 
             NumVarExpr* newNumVarExpr = new NumVarExpr;
             newNumVarExpr->type = Operand::VAR_NODE;
@@ -392,13 +428,13 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
     }
 
     // need to figure out how a unaryRelExp will actually be made.
-    else if (expressionType == "unaryRelExp" || expressionInUse(cstExpr)) { // has a different structure than others.
+    else if (expressionType == CstNonTerminal::UNARY_REL_EXP || expressionInUse(cstExpr)) { // has a different structure than others.
         NumVarExpr* operand1;
         NumVarExpr* operand2;
-        OpCode opcode;
+        TokenType opcode;
 
         // unaryRelExp case...
-        if (expressionType == "unaryRelExp") {
+        if (expressionType == CstNonTerminal::UNARY_REL_EXP) {
             // if not in use...
             std::cout << childrenNodes.size() << std::endl;
             if (childrenNodes.size() == 1) {
@@ -469,69 +505,6 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
         return addExprTreeToAST(childrenNodes[0]);
     }
 }
-
-// creates an AST expression tree from a CST expression node.
-//ExprNode* createExprTreeAST(CstNode* cstExpr) {
-//    // we can assume the expression is in use (it will only be called in this case).
-//    std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
-//    CstNode* cstRootOperands[2] = { childrenNodes[0], childrenNodes[1]->childrenNodes[1] };
-//    Operand operandTypes[2];
-//    OpCode opcode = findOpcode(cstExpr);
-//
-//    NumConstNode* nums[2];
-//    VarNode* vars[2];
-//    ExprNode* exprs[2];
-//
-//    bool validNodeReached = false;
-//
-//    ExprNode* newExprNode = new ExprNode();
-//
-//    for (int i = 0; i < 2; i++) {
-//        CstNode* cstOperand = cstRootOperands[i];
-//        validNodeReached = false;
-//        while (validNodeReached == false) {
-//            if (cstOperand->val == "factor") {
-//                std::string type = cstOperand->childrenNodes[0]->token.type;
-//                if (type == "_NUMCONST") {
-//                    operandTypes[i] = Operand::NUMCONST_NODE;
-//                    nums[i] = new NumConstNode(cstOperand->childrenNodes[0]->token.numConstVal);
-//                }
-//                else if (type == "_ID") {
-//                    operandTypes[i] = Operand::VAR_NODE;
-//                    vars[i] = new VarNode(cstOperand->childrenNodes[0]->token.varName);
-//                }
-//                validNodeReached = true;
-//            }
-//            else if (expressionInUse(cstOperand)) {
-//                exprs[i] = createExprTreeAST(cstOperand);
-//                operandTypes[i] = Operand::EXPR_NODE;
-//                validNodeReached = true;
-//            } 
-//        }
-//    }
-//
-//    newExprNode = new ExprNode(opcode, operandTypes[0], operandTypes[1]);
-//
-//    for (int i = 0; i < 2; i++) {
-//        switch (operandTypes[i]) {
-//            case Operand::VAR_NODE: {
-//                newExprNode->a.var = vars[i];
-//            }
-//            case Operand::EXPR_NODE: {
-//                newExprNode->a.expr = exprs[i];
-//            }
-//            case Operand::NUMCONST_NODE: {
-//                newExprNode->a.num = nums[i];
-//            }
-//        }
-//    }
-//
-//    return newExprNode;
-//}
-
-
-
-
 
 // converts CST expStmt to an expression node.
 //AstNode* addExprNodeToAST(CstNode* cstExprStmt) {
@@ -631,6 +604,7 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt) {
     return newStmtSeqNode;
 }
 
+// creates AST if node from CST node.
 Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
     std::cout << "============= creating if node =============" << std::endl;
     std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
@@ -708,40 +682,35 @@ Stmt* createBreakNodeAST(CstNode* cstIterStmt) {
 // deals with a stmt grammar expression.
 Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
     CstNode* specificStmt = stmtNodeAST->childrenNodes[0];
-    std::string stmtType = specificStmt->val;
+    CstNonTerminal stmtType = specificStmt->val.nonTerm;
 
-    // switch doesn't work with strings :(
-    if (stmtType == "expStmt") {
-        // add later...
-        /*return addExprNodeToAST(specificStmt);*/
-    }
-    else if (stmtType == "compoundStmt") {
-        return createStmtSeqNodeAST(specificStmt);
+    switch (stmtType) {
+        case(CstNonTerminal::EXP_STMT):
+            // add later...
+            /*return addExprNodeToAST(specificStmt);*/
 
-    }
-    else if (stmtType == "selectStmt") {
-        return createIfNodeAST(specificStmt);
+        case(CstNonTerminal::COMPOUND_STMT):
+            return createStmtSeqNodeAST(specificStmt);
 
-    }
-    else if (stmtType == "iterStmt") {
-        return createWhileNodeToAST(specificStmt);
+        case(CstNonTerminal::SELECT_STMT):
+            return createIfNodeAST(specificStmt);
 
-    }
-    else if (stmtType == "returnStmt") {
-        return createReturnNodeAST(specificStmt);
-    }
-    else if (stmtType == "breakStmt") {
-        return createBreakNodeAST(specificStmt);
+        case(CstNonTerminal::ITER_STMT):
+            return createWhileNodeToAST(specificStmt);
+
+        case(CstNonTerminal::RETURN_STMT):
+            return createReturnNodeAST(specificStmt);
+
+        case(CstNonTerminal::BREAK_STMT):
+            return createBreakNodeAST(specificStmt);
     }
 }
 
 // can this logic be merged with the previous function?
 std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector) {
     std::cout << "stmt List" << std::endl;
-    std::cout << stmtList->val << std::endl;
     std::vector<CstNode*> childrenNodes = stmtList->childrenNodes;
     if (childrenNodes.size() == 1) { // at dead end...
-        std::cout << childrenNodes[0]->val << std::endl;
         std::cout << "termination" << std::endl;
         return smtASTNodeVector;
     }
@@ -766,58 +735,72 @@ Stmt* createAST(CstNode* cstRootNode) {
     return rootNode;
 }
 
-CstNode* createCstNode(std::string e) {
+CstNode* createCstNode(std::variant<TokenType, CstNonTerminal> e) {
     CstNode* tmp = new CstNode;
-    tmp->val = e;
+
+    // if token...
+    if (std::holds_alternative<TokenType>(e)) {
+        tmp->isToken = true;
+        tmp->val.token = std::get<TokenType>(e);
+    }
+    // if non terminal..
+    else {
+        tmp->isToken = false;
+        tmp->val.nonTerm = std::get<CstNonTerminal>(e);
+    }
+
+
     tmp->childrenNodes = {};
     return tmp;
 }
 
+
+
 void defineLanguageGrammar() {
-    patternList["stmt"] = { {"expStmt"}, {"compoundStmt"}, {"selectStmt"}, {"iterStmt"}, {"returnStmt"}, {"breakStmt"} };
+    patternList[CstNonTerminal::STMT] = { {CstNonTerminal::EXP_STMT}, {CstNonTerminal::COMPOUND_STMT}, {CstNonTerminal::SELECT_STMT}, {CstNonTerminal::ITER_STMT}, {CstNonTerminal::RETURN_STMT}, {CstNonTerminal::BREAK_STMT} };
 
-    patternList["expStmt"] = { {"exp", "_semi"}, {"_semi"} };
+    patternList[CstNonTerminal::EXP_STMT] = { {CstNonTerminal::EXP, TokenType::_SEMI}, {TokenType::_SEMI} };
 
-    patternList["compoundStmt"] = { {"_opencurly", "decList", "stmtList", "_closecurly"} };
-    patternList["decList"] = { {"varDecl", "decList"}, {"E"} };
+    patternList[CstNonTerminal::COMPOUND_STMT] = { {TokenType::_OPENCURLY, CstNonTerminal::DEC_LIST, CstNonTerminal::STMT_LIST, TokenType::_CLOSECURLY} };
+    patternList[CstNonTerminal::DEC_LIST] = { {CstNonTerminal::VAR_DECL, CstNonTerminal::DEC_LIST}, {TokenType::_E} };
 
-    patternList["varDecl"] = { {"typeSpec", "varDeclInit", "_semi"} };
-    patternList["varDeclInit"] = { {"_ID", "_assign", "simpleExp"}, {"_ID"} };
-    patternList["typeSpec"] = { {"_int"} };
+    patternList[CstNonTerminal::VAR_DECL] = { {CstNonTerminal::TYPESPEC, CstNonTerminal::VAR_DECL_INIT, TokenType::_SEMI} };
+    patternList[CstNonTerminal::VAR_DECL_INIT] = { {TokenType::_ID, TokenType::_ASSIGN, CstNonTerminal::SIMPLE_EXP}, {TokenType::_ID} };
+    patternList[CstNonTerminal::TYPESPEC] = { {TokenType::_INT} };
 
-    patternList["stmtList"] = { {"stmt", "stmtList"}, {"E"} };
-    patternList["selectStmt"] = { {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt", "_else", "compoundStmt"}, {"_if", "_openbracket", "simpleExp", "_closebracket", "compoundStmt"},};
+    patternList[CstNonTerminal::STMT_LIST] = { {CstNonTerminal::STMT, CstNonTerminal::STMT_LIST}, {TokenType::_E} };
+    patternList[CstNonTerminal::SELECT_STMT] = { {TokenType::_IF, TokenType::_OPENBRACK, CstNonTerminal::SIMPLE_EXP, TokenType::_CLOSEBRACK, CstNonTerminal::COMPOUND_STMT, TokenType::_ELSE, CstNonTerminal::COMPOUND_STMT}, {TokenType::_IF, TokenType::_OPENBRACK, CstNonTerminal::SIMPLE_EXP, TokenType::_CLOSEBRACK, CstNonTerminal::COMPOUND_STMT},};
 
-    patternList["iterStmt"] = { {"_while", "_openbracket", "simpleExp", "_closebracket", "compoundStmt"} };
+    patternList[CstNonTerminal::ITER_STMT] = { {TokenType::_WHILE, TokenType::_OPENBRACK, CstNonTerminal::SIMPLE_EXP, TokenType::_CLOSEBRACK, CstNonTerminal::COMPOUND_STMT} };
     
     // original definitions had exp instead of simpleExp, idk why though.
-    patternList["returnStmt"] = { {"_return", "_semi"}, {"_return", "simpleExp", "_semi"} };
+    patternList[CstNonTerminal::RETURN_STMT] = { {TokenType::_RETURN, TokenType::_SEMI}, {TokenType::_RETURN, CstNonTerminal::SIMPLE_EXP, TokenType::_SEMI} };
 
-    patternList["breakStmt"] = { {"_break", "_semi"} };
+    patternList[CstNonTerminal::BREAK_STMT] = { {TokenType::_BREAK, TokenType::_SEMI} };
 
-    patternList["exp"] = { {"_ID", "_assign", "exp"}, {"simpleExp"} };
+    patternList[CstNonTerminal::EXP] = { {TokenType::_ID, TokenType::_ASSIGN, CstNonTerminal::EXP}, {CstNonTerminal::SIMPLE_EXP} };
 
-    patternList["simpleExp"] = { {"andExp", "simpleExp*"} };
-    patternList["simpleExp*"] = { {"and", "andExp", "simpleExp*"}, {"E"} };
+    patternList[CstNonTerminal::SIMPLE_EXP] = { {CstNonTerminal::AND_EXP, CstNonTerminal::SIMPLE_EXP__} };
+    patternList[CstNonTerminal::SIMPLE_EXP__] = { {TokenType::_AND, CstNonTerminal::AND_EXP, CstNonTerminal::SIMPLE_EXP__}, {TokenType::_E} };
 
-    patternList["andExp"] = { {"unaryRelExp", "andExp*"} };
-    patternList["andExp*"] = { {"_or", "unaryRelExp", "andExp*"}, {"E"} };
+    patternList[CstNonTerminal::AND_EXP] = { {CstNonTerminal::UNARY_REL_EXP, CstNonTerminal::AND_EXP__} };
+    patternList[CstNonTerminal::AND_EXP__] = { {TokenType::_OR, CstNonTerminal::UNARY_REL_EXP, CstNonTerminal::AND_EXP__}, {TokenType::_E} };
 
-    patternList["unaryRelExp"] = { {"relExp"}, {"_not", "unaryRelExp"} };
+    patternList[CstNonTerminal::UNARY_REL_EXP] = { {CstNonTerminal::REL_EXP}, {TokenType::_NOT, CstNonTerminal::UNARY_REL_EXP} };
 
-    patternList["relExp"] = { {"sumExp", "relExp*"}};
-    patternList["relExp*"] = { {"relOp", "sumExp"}, {"E"}};
-    patternList["relOp"] = { {"_lessthanequal"}, {"_lessthan"}, {"_greaterthan"}, {"_greaterthanequal"}, {"_equal"}, {"_notequal"} };
+    patternList[CstNonTerminal::REL_EXP] = { {CstNonTerminal::SUM_EXP, CstNonTerminal::REL_EXP__}};
+    patternList[CstNonTerminal::REL_EXP__] = { {CstNonTerminal::REL_OP, CstNonTerminal::SUM_EXP}, {TokenType::_E}};
+    patternList[CstNonTerminal::REL_OP] = { {TokenType::_LE}, {TokenType::_LT}, {TokenType::_GT}, {TokenType::_GE}, {TokenType::_EQUAL}, {TokenType::_NOTEQUAL} };
 
-    patternList["sumExp"] = { {"mulExp", "sumExp*"} };
-    patternList["sumExp*"] = { {"sumOp", "mulExp", "sumExp*"}, {"E"} };
-    patternList["sumOp"] = { {"_plus"}, {"_subtract"} };
+    patternList[CstNonTerminal::SUM_EXP] = { {CstNonTerminal::MUL_EXP, CstNonTerminal::SUM_EXP__} };
+    patternList[CstNonTerminal::SUM_EXP__] = { {CstNonTerminal::SUM_OP, CstNonTerminal::MUL_EXP, CstNonTerminal::SUM_EXP__}, {TokenType::_E} };
+    patternList[CstNonTerminal::SUM_OP] = { {TokenType::_ADD}, {TokenType::_SUB} };
 
-    patternList["mulExp"] = { {"factor", "mulExp*"} };
-    patternList["mulExp*"] = { {"mulOp", "fatcor", "mulExp*"}, {"E"} };
-    patternList["mulOp"] = { {"_multiply"}, {"_divide"} };
+    patternList[CstNonTerminal::MUL_EXP] = { {CstNonTerminal::FACTOR, CstNonTerminal::MUL_EXP__} };
+    patternList[CstNonTerminal::MUL_EXP__] = { {CstNonTerminal::MUL_OP, CstNonTerminal::FACTOR, CstNonTerminal::MUL_EXP__}, {TokenType::_E} };
+    patternList[CstNonTerminal::MUL_OP] = { {TokenType::_MUL}, {TokenType::_DIV} };
 
-    patternList["factor"] = { {"_NUMCONST"}, {"_ID"} };
+    patternList[CstNonTerminal::FACTOR] = { {TokenType::_NUMCONST}, {TokenType::_ID} };
 }
 
 void displayVector(std::vector<std::string> vectorToDisplay) {
@@ -840,22 +823,13 @@ int countNodes(CstNode* t) {
     }
 }
 
-void print_tree(CstNode* t) {
-    if (t != NULL) {
-        std::vector<CstNode*> children = t->childrenNodes;
-        for (int i = 0; i < children.size(); i++) {
-            print_tree(children[i]);
-        }
-        std::cout << t->val << std::endl;
-    }
-}
 
 // tokenizer can't tolerate indentation atm.
 // converts the provided source code string into a vector of tokens.
 std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
     std::vector<Token> tokenList;
-    std::string previousToken;
-    std::string tokenType;
+    TokenType prevType = TokenType::_E;
+    TokenType type;
 
     std::string numConstVal; // this has to be a string so it can be appended to.
     std::string varName;
@@ -867,162 +841,155 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
         }
         else if (isdigit(source_code[i])) {
             numConstVal += source_code[i];
-            if (previousToken != "_NUMCONST") {
-                tokenType = "_NUMCONST";
+            if (prevType != TokenType::_NUMCONST) {
+                type = TokenType::_NUMCONST;
             }
             else {
                 continue;
             }
         }
 
-        else if (source_code.substr(i, 3) == "if(" && (previousToken == "_semi" || previousToken == "_closecurly" || previousToken == "")) {
+        else if (source_code.substr(i, 3) == "if(" && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
             i += 1;
-            tokenType = "_if";
+            type = TokenType::_IF;
         }
-
-        else if (source_code.substr(i, 5) == "else{" && (previousToken == "_closecurly")) {
+        
+        else if (source_code.substr(i, 5) == "else{" && (prevType == TokenType::_CLOSECURLY)) {
             i += 3;
-            tokenType = "_else";
+            type = TokenType::_ELSE;
         }
 
-        else if (source_code.substr(i, 6) == "while(" && (previousToken == "_semi" || previousToken == "_closecurly" || previousToken == "")) {
+        else if (source_code.substr(i, 6) == "while(" && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
             i += 4;
-            tokenType = "_while";
+            type = TokenType::_WHILE;
         }
 
-        else if ((source_code.substr(i, 7) == "return;" || source_code.substr(i, 7) == "return ") && (previousToken == "_semi" || previousToken == "_closecurly" || previousToken == "")) {
+        else if ((source_code.substr(i, 7) == "return;" || source_code.substr(i, 7) == "return ") && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
             i += 5;
-            tokenType = "_return";
+            type = TokenType::_RETURN;
         }
 
-        else if ((source_code.substr(i, 6) == "break;") && (previousToken == "_semi" || previousToken == "_closecurly" || previousToken == "")) {
+        else if ((source_code.substr(i, 6) == "break;") && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
             i += 4;
-            tokenType = "_break";
+            type = TokenType::_BREAK;
         }
 
-        else if ((source_code.substr(i, 4) == "int ") && (previousToken == "_semi" || previousToken == "_closecurly" || previousToken == "" || previousToken == "_opencurly")) {
+        else if ((source_code.substr(i, 4) == "int ") && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E || prevType == TokenType::_OPENCURLY)) {
             i += 3;
-            tokenType = "_int";
+            type = TokenType::_INT;
         }
 
         else if (source_code.substr(i, 2) == "&&") {
             i += 1;
-            tokenType = "_and";
+            type = TokenType::_AND;
         }
 
         else if (source_code.substr(i, 2) == "||") {
             i += 1;
-            tokenType = "_or";
+            type = TokenType::_OR;
         }
 
         else if (source_code[i] == '<') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                tokenType = "_lessthanequal";
+                type = TokenType::_LE;
             }
             else {
-                tokenType = "_lessthan";
+                type = TokenType::_LT;
             }
         }
 
         else if (source_code[i] == '>') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                tokenType = "_greaterthanequal";
+                type = TokenType::_GE;
             }
             else {
-                tokenType = "_greaterthan";
+                type = TokenType::_GT;
             }
         }
 
         else if (source_code[i] == '=') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                tokenType = "_equal";
+                type = TokenType::_EQUAL;
             }
             else {
-                tokenType = "_assign";
+                type = TokenType::_ASSIGN;
             }
         }
 
         else if (source_code[i] == '!') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                tokenType = "_notequal";
+                type = TokenType::_NOTEQUAL;
             }
             else {
-                tokenType = "_not";
+                type = TokenType::_NOT;
             }
         }
 
         else if (source_code[i] == '+') {
-            tokenType = "_plus";
+            type = TokenType::_ADD;
         }
 
         else if (source_code[i] == '-') {
-            tokenType = "_subtract";
+            type = TokenType::_SUB;
         }
 
         else if (source_code[i] == '*') {
-            tokenType = "_multiply";
+            type = TokenType::_MUL;
         }
 
         else if (source_code[i] == '/') {
-            tokenType = "_divide";
+            type = TokenType::_DIV;
         }
 
         else if (source_code[i] == ';') {
-            tokenType = "_semi";
+            type = TokenType::_SEMI;
         }
 
         else if (source_code[i] == '{') {
-            tokenType = "_opencurly";
+            type = TokenType::_OPENCURLY;
         }
 
         else if (source_code[i] == '}') {
-            tokenType = "_closecurly";
+            type = TokenType::_CLOSECURLY;
         }
 
         else if (source_code[i] == '(') {
-            tokenType = "_openbracket";
+            type = TokenType::_OPENBRACK;
         }
 
         else if (source_code[i] == ')') {
-            tokenType = "_closebracket";
+            type = TokenType::_CLOSEBRACK;
         }
 
         else {
             varName += source_code[i];
-            if (previousToken != "_ID") {
-                tokenType = "_ID";
+            if (prevType != TokenType::_ID) {
+                type = TokenType::_ID;
             }
             else {
                 continue;
             }
         }
 
-        if (tokenType != "_ID" && varName != "") {
+        if (type != TokenType::_ID && varName != "") {
             tokenList.back().varName = varName;
             varName = "";
         }
 
-        if (tokenType != "_NUMCONST" && numConstVal != "") {
+        if (type != TokenType::_NUMCONST && numConstVal != "") {
             tokenList.back().numConstVal = stoi(numConstVal); // i think this casting is unavoidable.
             numConstVal = "";
         }
 
         Token tokenObj;
-        tokenObj.type = tokenType;
+        tokenObj.type = type;
         tokenList.push_back(tokenObj);
-        previousToken = tokenType;
+        prevType = type;
 
-    }
-
-    if (debugMode == true) {
-        for (int i = 0; i < tokenList.size(); i++) {
-            std::cout << tokenList[i].type;
-            // needs re-writing to take values into account
-        }
     }
 
     return tokenList;
@@ -1030,20 +997,20 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
 
 // recursive function to validate a provided grammar pattern for the current point in the token stream.
 // TO-DO: Probably rewrite without pointers, just put the object itself inside the vector.
-bool validPattern(std::vector<std::string> pattern, CstNode* rootTreeNode, bool debugMode) {
+bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, CstNode* rootTreeNode, bool debugMode) {
     rootTreeNode->childrenNodes.clear();
     
 
-    for (std::string &component : pattern) { // by reference is more efficient.
+    for (std::variant<TokenType,CstNonTerminal>&component : pattern) { // by reference is more efficient.
         
         CstNode* newTreeNode = createCstNode(component);
         rootTreeNode->childrenNodes.push_back(newTreeNode);
 
-        // if not a token...
-        if (tokens.find(component) == tokens.end()) {
+        // if a non terminal...
+        if (!newTreeNode->isToken) {
             bool valid = false;
 
-            for (std::vector<std::string> &possiblePattern : patternList[component]) {
+            for (std::vector<std::variant<TokenType, CstNonTerminal>>&possiblePattern : patternList[std::get<CstNonTerminal>(component)]) {
                 int savedInputPtr = inputPtr;
                 if (validPattern(possiblePattern, newTreeNode, debugMode)) {
                     valid = true;
@@ -1057,14 +1024,16 @@ bool validPattern(std::vector<std::string> pattern, CstNode* rootTreeNode, bool 
                 return false;
             }
         }
+
+        // if a token...
         else {
             newTreeNode->token = tokenStream[inputPtr];
-            newTreeNode->tokenPresent = true;
+            newTreeNode->isToken = true;
 
-            if (component == tokenStream[inputPtr].type) {
+            if (std::get<TokenType>(component) == tokenStream[inputPtr].type) {
                 inputPtr++;
             }
-            else if (component == "E") {
+            else if (std::get<TokenType>(component) == TokenType::_E) {
                 continue;
             }
             else {
@@ -1077,9 +1046,9 @@ bool validPattern(std::vector<std::string> pattern, CstNode* rootTreeNode, bool 
 
 // returns the root node of the Concrete Syntax Tree or NULL in the event of a syntax error.
 CstNode* generateCST(bool debugMode) {
-    CstNode* rootNode = createCstNode("compoundStmt");
+    CstNode* rootNode = createCstNode(CstNonTerminal::COMPOUND_STMT);
 
-    if (!validPattern(patternList["compoundStmt"][0], rootNode, debugMode)) {
+    if (!validPattern(patternList[CstNonTerminal::COMPOUND_STMT][0], rootNode, debugMode)) {
         return NULL;
     }
     return rootNode;
