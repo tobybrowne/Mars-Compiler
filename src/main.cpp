@@ -9,11 +9,8 @@
 #include <cassert>
 #include <variant>
 
-
-
 // for now we're defining our source code as a variable - later we can parse it as a parameter to the compiler.
 std::string source_code = "C://Users//toby//Documents//Mars//test.clite";
-
 
 enum class CstNonTerminal {
     STMT,
@@ -43,8 +40,7 @@ enum class CstNonTerminal {
     MUL_EXP,
     MUL_EXP__,
     MUL_OP,
-    FACTOR,
-    NULL_NONTERMINAL // to deal with undefined parameters.
+    FACTOR
 };
 
 // starting underscores indicate tokens, nothing else should have them.
@@ -76,19 +72,13 @@ enum class TokenType {
     _AND,
     _OR,
     _NOT,
-    _E,
-    NULL_TOKEN, // for undefined parameters
+    _E
 };
 
 TokenType delimiters[] = { TokenType::_SEMI, TokenType::_OPENCURLY, TokenType::_CLOSECURLY, TokenType::_OPENBRACK,TokenType::_CLOSEBRACK, TokenType::_E };
 
-
-
-
-// add position of the token in the code to the object
-struct Token {
+struct Token{
     TokenType type;
-
     // only one can be true at a time so use a union to save memory?!?
     // using a union throws some stupid constructor errors that need to be resolved.
     std::string varName;
@@ -107,16 +97,24 @@ class CstNode {
         std::vector<CstNode*> childrenNodes;
         bool isToken = false;
         Token token;
+
+        CstNode(std::variant<TokenType, CstNonTerminal> e);
 };
 
+CstNode::CstNode(std::variant<TokenType, CstNonTerminal> e) {
+    // if token...
+    if (std::holds_alternative<TokenType>(e)) {
+        isToken = true;
+        val.token = std::get<TokenType>(e);
+    }
+    // if non terminal..
+    else {
+        isToken = false;
+        val.nonTerm = std::get<CstNonTerminal>(e);
+    }
+}
+
 std::map<CstNonTerminal, std::vector<std::vector<std::variant<TokenType, CstNonTerminal>>>> patternList;
-
-// AST Nodes:
-
-// the AST should be above everything, no reference to tokens, you should be able to understand the entire program
-// with the AST alone.
-// annoyingly, this technique does not provide type-checking.
-// struct AstNode;
 
 enum class Node {
     IF_NODE,
@@ -309,9 +307,6 @@ class NumVarExpr {
 };
 
 
-
-
-
 // it would only be worth splitting up the statements if we had plans for some sort of type checking.
 class Stmt {
     public:
@@ -376,132 +371,110 @@ Stmt::~Stmt() {
 }
 
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
-// make sure this works with relExp.
 bool expressionInUse(CstNode* cstExprNode) {
-    // checking the children of expression* (make sure this index is correct)
-    if (((cstExprNode->childrenNodes)[1])->childrenNodes.size() == 1) {
-        return false;
-    }
-    else {
+    // unaryRelExp...
+    if (cstExprNode->val.nonTerm == CstNonTerminal::UNARY_REL_EXP) {
+        if (cstExprNode->childrenNodes.size() == 1) {
+            return false;
+        }
         return true;
     }
+    // everything else...
+    else {
+        if (((cstExprNode->childrenNodes)[1])->childrenNodes.size() == 1) {
+            return false;
+        }
+        return true;
+    }  
 }
 
 // this is required because sometimes the opcode has a parent node like "relOp", sometimes it does not.
 TokenType findOpcode(CstNode* cstExprNode) {
-
     if (cstExprNode->isToken) {
-        TokenType opCodeToken = cstExprNode->val.token;
+        return cstExprNode->val.token;
     }
     else {
         return findOpcode(cstExprNode->childrenNodes[0]);
     }
 }
 
-NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
+// converts CST expression tree into an AST expression tree.
+NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
     CstNonTerminal expressionType = cstExpr->val.nonTerm;
     std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
 
     if (expressionType == CstNonTerminal::FACTOR) {
         Token factorToken = childrenNodes[0]->token;
         TokenType factorType = factorToken.type;
-
+        NumVarExpr* newNumVarExpr = new NumVarExpr;
 
         if (factorType == TokenType::_NUMCONST) {
-            NumVarExpr* newNumVarExpr = new NumVarExpr;
             newNumVarExpr->type = Operand::NUMCONST_NODE;
             newNumVarExpr->data.numconst = new NumConstNode(factorToken.numConstVal);
-            std::cout << "heya" << std::endl;
-            return newNumVarExpr;
         }
         else if (factorType == TokenType::_ID) {
-
-            NumVarExpr* newNumVarExpr = new NumVarExpr;
             newNumVarExpr->type = Operand::VAR_NODE;
             newNumVarExpr->data.var = new VarNode(factorToken.varName);
-
-            return newNumVarExpr;
         }
-
+        return newNumVarExpr;
     }
 
-    // need to figure out how a unaryRelExp will actually be made.
-    else if (expressionType == CstNonTerminal::UNARY_REL_EXP || expressionInUse(cstExpr)) { // has a different structure than others.
+    // if in use
+    else if (expressionInUse(cstExpr)) {
         NumVarExpr* operand1;
         NumVarExpr* operand2;
         TokenType opcode;
 
-        // unaryRelExp case...
         if (expressionType == CstNonTerminal::UNARY_REL_EXP) {
-            // if not in use...
-            std::cout << childrenNodes.size() << std::endl;
-            if (childrenNodes.size() == 1) {
-                return addExprTreeToAST(childrenNodes[0]);
-            }
-            else {
-                std::cout << "in use" << std::endl;
-                operand1 = addExprTreeToAST(childrenNodes[1]);
-                std::cout << "operand 1 done" << std::endl;
-                operand2 = operand1;
-                std::cout << "operand 2 done" << std::endl;
-
-                opcode = findOpcode(childrenNodes[0]);
-                std::cout << "found opcode" << std::endl;
-            }
+            operand1 = createExprTreeAST(childrenNodes[1]);
+            operand2 = operand1;
+            opcode = findOpcode(childrenNodes[0]);
         }
-
-        // normal in use expression case...
         else {
-            std::cout << "in use" << std::endl;
-            operand1 = addExprTreeToAST(childrenNodes[0]);
-            std::cout << "operand 1 done" << std::endl;
-            operand2 = addExprTreeToAST(childrenNodes[1]->childrenNodes[1]);
-            std::cout << "operand 2 done" << std::endl;
-
+            operand1 = createExprTreeAST(childrenNodes[0]);
+            operand2 = createExprTreeAST(childrenNodes[1]->childrenNodes[1]);
             opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
-            std::cout << "found opcode" << std::endl;
         }
 
         ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
 
         // nodes don't link to NumVarExpr types - just the actual operand type. 
         switch (operand1->type) {
-        case Operand::VAR_NODE: {
-            newExprNode->a.var = operand1->data.var;
-        }
-        case Operand::EXPR_NODE: {
-            newExprNode->a.expr = operand1->data.expr;
-        }
-        case Operand::NUMCONST_NODE: {
-            newExprNode->a.num = operand1->data.numconst;
-        }
+            case Operand::VAR_NODE: {
+                newExprNode->a.var = operand1->data.var;
+            }
+            case Operand::EXPR_NODE: {
+                newExprNode->a.expr = operand1->data.expr;
+            }
+            case Operand::NUMCONST_NODE: {
+                newExprNode->a.num = operand1->data.numconst;
+            }
         }
 
         switch (operand2->type) {
-        case Operand::VAR_NODE: {
-            newExprNode->b.var = operand2->data.var;
-        }
-        case Operand::EXPR_NODE: {
-            newExprNode->b.expr = operand2->data.expr;
-        }
-        case Operand::NUMCONST_NODE: {
-            newExprNode->b.num = operand2->data.numconst;
-        }
+            case Operand::VAR_NODE: {
+                newExprNode->b.var = operand2->data.var;
+            }
+            case Operand::EXPR_NODE: {
+                newExprNode->b.expr = operand2->data.expr;
+            }
+            case Operand::NUMCONST_NODE: {
+                newExprNode->b.num = operand2->data.numconst;
+            }
         }
 
+        // creates expression node and returns it.
         NumVarExpr* newNumVarExpr = new NumVarExpr;
         newNumVarExpr->type = Operand::EXPR_NODE;
         newNumVarExpr->data.expr = newExprNode;
 
         return newNumVarExpr;
-
     }
     
-
+    // not in use...
     else {
-        std::cout << "not in use" << std::endl;
-        return addExprTreeToAST(childrenNodes[0]);
-    }
+        return createExprTreeAST(childrenNodes[0]);
+    } 
 }
 
 // converts CST expStmt to an expression node.
@@ -520,108 +493,82 @@ NumVarExpr* addExprTreeToAST(CstNode* cstExpr) {
 //    }
 //}
 
+// creates a variable declaration node.
+Stmt* createVarDeclNodeAST(CstNode* varDeclNode) {
+    Stmt* newDeclNode = new Stmt(Statement::DECL_NODE);
 
-std::vector<Stmt*> addDecListToAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector) {
-    std::cout << "making dec list" << std::endl;
+    newDeclNode->declNode.variable = new VarNode((varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName);
+    NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2]);
+    Operand initType = init->type;
+
+    newDeclNode->declNode.initType = initType;
+
+    switch (initType) {
+        case Operand::VAR_NODE: {
+            newDeclNode->declNode.init.var = init->data.var;
+        }
+        case Operand::EXPR_NODE: {
+            newDeclNode->declNode.init.expr = init->data.expr;
+        }
+        case Operand::NUMCONST_NODE: {
+            newDeclNode->declNode.init.num = init->data.numconst;
+        }
+    }
+
+    return newDeclNode;
+}
+
+// generates a vector of declerations from the recursive CST decl structure.
+std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector) {
     std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
+
     if (childrenNodes.size() == 1) { // at dead end...
         return decASTNodeVector;
     }
-    for (int i = 0; i < 2; i++) {
-        if (i == 0) { // varDecl...
-            std::cout << "============ making var decl ============" << std::endl;
-            CstNode* varDeclNode = childrenNodes[0];
-            Token idToken = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token;
 
-            CstNode* simpleExp = (varDeclNode->childrenNodes)[1]->childrenNodes[2];
+    decASTNodeVector.push_back(createVarDeclNodeAST(childrenNodes[0])); // manages varDecl...
 
-            Stmt* newDeclNode = new Stmt(Statement::DECL_NODE);
-            newDeclNode->declNode.variable = new VarNode(idToken.varName);
+    decASTNodeVector = createDeclListAST(childrenNodes[1], decASTNodeVector); // manages further decList
+    return decASTNodeVector;
 
-            NumVarExpr* init = addExprTreeToAST(simpleExp);
-            Operand initType = init->type;
-
-            newDeclNode->declNode.initType = initType;
-
-            switch (initType) {
-                case Operand::VAR_NODE: {
-                    newDeclNode->declNode.init.var = init->data.var;
-                }
-                case Operand::EXPR_NODE: {
-                    newDeclNode->declNode.init.expr = init->data.expr;
-                }
-                case Operand::NUMCONST_NODE: {
-                    newDeclNode->declNode.init.num = init->data.numconst;
-                }
-            }
-
-            decASTNodeVector.push_back(newDeclNode);
-
-        }
-        else { // further decList...
-            decASTNodeVector = addDecListToAST(childrenNodes[i], decASTNodeVector);
-            return decASTNodeVector;
-        }
-    }
 }
 
-
-std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector);
+// forward declaration required.
+std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector);
 
 // converts CST cmpdStmt to AST stmtSeqNode
 Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt) {
-    std::cout << "making statement sequence" << std::endl;
+    std::vector<Stmt*> decList;
+    std::vector<Stmt*> stmtList;
     std::vector<CstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
 
     Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
     
-    std::vector<Stmt*> decList;
-    std::vector<Stmt*> stmtList;
-   
-    for (int i = 0; i < 4; i++) {
-        // decList
-        if (i == 1) {
-            decList = addDecListToAST(childrenNodes[1], {});
-            std::cout << decList.size() << std::endl;
-            std::cout << "finished declist stuff" << std::endl;
-        }
-        // stmtList
-        else if (i == 2) {
-            std::cout << "starting stmtList stuff" << std::endl;
-            stmtList = addStmtListToAST(childrenNodes[i], {});
-            std::cout << "finish stmtList stuff" << std::endl;
-        }
-    }
+    // manages decList...
+    decList = createDeclListAST(childrenNodes[1], {});
 
-    decList.insert(decList.end(), stmtList.begin(), stmtList.end());
-    std::cout << decList.size() << std::endl;
-    std::cout << "heeey" << std::endl;
+    // manages stmtList...
+    stmtList = createStmtListAST(childrenNodes[2], {});
+   
+    decList.insert(decList.end(), stmtList.begin(), stmtList.end()); // merges decList and stmtList
     newStmtSeqNode->seqNode.stmts = decList;
-    std::cout << "heeey1" << std::endl;
 
     return newStmtSeqNode;
 }
 
 // creates AST if node from CST node.
 Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
-    std::cout << "============= creating if node =============" << std::endl;
     std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
 
     Stmt* newIfNode = new Stmt(Statement::IF_NODE);
 
+    newIfNode->ifNode.condition = createExprTreeAST(childrenNodes[2])->data.expr; // is this always an expression?
 
-    // why is this in a for loop? just use the indexes directly.
-    for (int i = 0; i < childrenNodes.size(); i++) {
-        if (i == 2) {
-            // is this always an expression?
-            newIfNode->ifNode.condition = addExprTreeToAST(childrenNodes[i])->data.expr;
-        }
-        else if (i == 4) {
-            newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[i]);
-        }
-        else if (i == 6) {
-            newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[i]);
-        }
+    newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[4]);
+
+    // if else statement is present...
+    if (childrenNodes.size() == 7) {
+        newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[6]);
     }
 
     return newIfNode;
@@ -629,12 +576,10 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
 
 // creates AST while node from CST node.
 Stmt* createWhileNodeToAST(CstNode* cstIterStmt) {
-    std::cout << "============= creating while node =============" << std::endl;
     std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
 
     Stmt* newWhileNode = new Stmt(Statement::WHILE_NODE);
-
-    newWhileNode->whileNode.condition = addExprTreeToAST(childrenNodes[2])->data.expr;
+    newWhileNode->whileNode.condition = createExprTreeAST(childrenNodes[2])->data.expr;
     newWhileNode->whileNode.body = createStmtSeqNodeAST(childrenNodes[4]);
 
     return newWhileNode;
@@ -642,15 +587,14 @@ Stmt* createWhileNodeToAST(CstNode* cstIterStmt) {
 
 // creates AST return node from CST node.
 Stmt* createReturnNodeAST(CstNode* cstRetStmt) {
-    std::cout << "============= creating return node =============" << std::endl;
     std::vector<CstNode*> childrenNodes = cstRetStmt->childrenNodes;
 
     Stmt* newRetNode = new Stmt(Statement::RET_NODE);
 
-    if (childrenNodes.size() == 3) {
+    if (childrenNodes.size() == 3) { // if return statement has operand.
         newRetNode->retNode.operandPresent = true;
 
-        NumVarExpr* operand = addExprTreeToAST(childrenNodes[1]);
+        NumVarExpr* operand = createExprTreeAST(childrenNodes[1]);
 
         switch (operand->type) {
             case Operand::VAR_NODE: {
@@ -663,21 +607,16 @@ Stmt* createReturnNodeAST(CstNode* cstRetStmt) {
                 newRetNode->retNode.operand.num = operand->data.numconst;
             }
         }
-
     }
     return newRetNode;
 }
 
 // creates AST break node from CST node.
-Stmt* createBreakNodeAST(CstNode* cstIterStmt) {
-    std::cout << "============= creating break node =============" << std::endl;
-    Stmt* newBreakNode = new Stmt(Statement::BREAK_NODE);
-    return newBreakNode;
+Stmt* createBreakNodeAST(CstNode* cstIterStmt){
+    return new Stmt(Statement::BREAK_NODE);;
 }
 
-
-
-// deals with a stmt grammar expression.
+// takes a "stmt" non terminal and creates the correct stmt node.
 Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
     CstNode* specificStmt = stmtNodeAST->childrenNodes[0];
     CstNonTerminal stmtType = specificStmt->val.nonTerm;
@@ -704,56 +643,27 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
     }
 }
 
-// can this logic be merged with the previous function?
-std::vector<Stmt*> addStmtListToAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector) {
-    std::cout << "stmt List" << std::endl;
+// generates a vector of stmts from the recursive CST stmt structure.
+std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector) {
     std::vector<CstNode*> childrenNodes = stmtList->childrenNodes;
+
     if (childrenNodes.size() == 1) { // at dead end...
-        std::cout << "termination" << std::endl;
         return smtASTNodeVector;
     }
-    for (int i = 0; i < 2; i++) {
-        if (i == 0) { // stmtDecl...
-            
-            smtASTNodeVector.push_back(createStmtNodeAST(childrenNodes[i]));
-
-        }
-        else { // further stmtList...
-            
-            smtASTNodeVector = addStmtListToAST(childrenNodes[i], smtASTNodeVector);
-            return smtASTNodeVector;
-        }
-
+    else {
+        smtASTNodeVector.push_back(createStmtNodeAST(childrenNodes[0])); // manages stmtDecl...
+        smtASTNodeVector = createStmtListAST(childrenNodes[1], smtASTNodeVector); // manages furtherstmtDecl
+        return smtASTNodeVector;
     }
 }
 
+// generate AST and returns pointer to root node.
 Stmt* createAST(CstNode* cstRootNode) {
     // currently first node is always a compoundStmt node.
-    Stmt* rootNode = createStmtSeqNodeAST(cstRootNode);
-    return rootNode;
+    return createStmtSeqNodeAST(cstRootNode);
 }
 
-CstNode* createCstNode(std::variant<TokenType, CstNonTerminal> e) {
-    CstNode* tmp = new CstNode;
-
-    // if token...
-    if (std::holds_alternative<TokenType>(e)) {
-        tmp->isToken = true;
-        tmp->val.token = std::get<TokenType>(e);
-    }
-    // if non terminal..
-    else {
-        tmp->isToken = false;
-        tmp->val.nonTerm = std::get<CstNonTerminal>(e);
-    }
-
-
-    tmp->childrenNodes = {};
-    return tmp;
-}
-
-
-
+// eventually we can place this data structure into a separate header file.
 void defineLanguageGrammar() {
     patternList[CstNonTerminal::STMT] = { {CstNonTerminal::EXP_STMT}, {CstNonTerminal::COMPOUND_STMT}, {CstNonTerminal::SELECT_STMT}, {CstNonTerminal::ITER_STMT}, {CstNonTerminal::RETURN_STMT}, {CstNonTerminal::BREAK_STMT} };
 
@@ -801,39 +711,17 @@ void defineLanguageGrammar() {
     patternList[CstNonTerminal::FACTOR] = { {TokenType::_NUMCONST}, {TokenType::_ID} };
 }
 
-void displayVector(std::vector<std::string> vectorToDisplay) {
-    std::string outputString;
-    for (int i = 0; i < vectorToDisplay.size(); i++) {
-        outputString += vectorToDisplay[i];
-        outputString += " ";
-    }
-    std::cout << outputString << std::endl;
-}
-
-int countNodes(CstNode* t) {
-    if (t != NULL) {
-        std::vector<CstNode*> children = t->childrenNodes;
-        int childrenNodes = 0;
-        for (int i = 0; i < children.size(); i++) {
-            childrenNodes += countNodes(children[i]);
-        }
-        return 1 + childrenNodes;
-    }
-}
-
-
 // tokenizer can't tolerate indentation atm.
 // converts the provided source code string into a vector of tokens.
 std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
     std::vector<Token> tokenList;
     TokenType prevType = TokenType::_E;
-    TokenType type;
+    TokenType currentType;
 
     std::string numConstVal; // this has to be a string so it can be appended to.
     std::string varName;
     
     for (int i = 0; i < source_code.length(); i++) {
-
         bool prevIsDelimiter = std::find(std::begin(delimiters), std::end(delimiters), prevType) != std::end(delimiters);
 
         if (source_code[i] == ' ' || source_code[i] == '\n') {
@@ -842,7 +730,7 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
         else if (isdigit(source_code[i])) {
             numConstVal += source_code[i];
             if (prevType != TokenType::_NUMCONST) {
-                type = TokenType::_NUMCONST;
+                currentType = TokenType::_NUMCONST;
             }
             else {
                 continue;
@@ -851,144 +739,148 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
 
         else if (source_code.substr(i, 3) == "if(" && prevIsDelimiter) {
             i += 1;
-            type = TokenType::_IF;
+            currentType = TokenType::_IF;
         }
         
         else if (source_code.substr(i, 5) == "else{" && prevIsDelimiter) {
             i += 3;
-            type = TokenType::_ELSE;
+            currentType = TokenType::_ELSE;
         }
 
         else if (source_code.substr(i, 6) == "while(" && prevIsDelimiter) {
             i += 4;
-            type = TokenType::_WHILE;
+            currentType = TokenType::_WHILE;
         }
 
         else if ((source_code.substr(i, 7) == "return;" || source_code.substr(i, 7) == "return ") && prevIsDelimiter) {
             i += 5;
-            type = TokenType::_RETURN;
+            currentType = TokenType::_RETURN;
         }
 
         else if ((source_code.substr(i, 6) == "break;") && prevIsDelimiter) {
             i += 4;
-            type = TokenType::_BREAK;
+            currentType = TokenType::_BREAK;
         }
 
         else if ((source_code.substr(i, 4) == "int ") && prevIsDelimiter) {
             i += 3;
-            type = TokenType::_INT;
+            currentType = TokenType::_INT;
         }
 
         else if (source_code.substr(i, 2) == "&&") {
             i += 1;
-            type = TokenType::_AND;
+            currentType = TokenType::_AND;
         }
 
         else if (source_code.substr(i, 2) == "||") {
             i += 1;
-            type = TokenType::_OR;
+            currentType = TokenType::_OR;
         }
 
         else if (source_code[i] == '<') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                type = TokenType::_LE;
+                currentType = TokenType::_LE;
             }
             else {
-                type = TokenType::_LT;
+                currentType = TokenType::_LT;
             }
         }
 
         else if (source_code[i] == '>') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                type = TokenType::_GE;
+                currentType = TokenType::_GE;
             }
             else {
-                type = TokenType::_GT;
+                currentType = TokenType::_GT;
             }
         }
 
         else if (source_code[i] == '=') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                type = TokenType::_EQUAL;
+                currentType = TokenType::_EQUAL;
             }
             else {
-                type = TokenType::_ASSIGN;
+                currentType = TokenType::_ASSIGN;
             }
         }
 
         else if (source_code[i] == '!') {
             if (source_code[i + 1] == '=') {
                 i += 1;
-                type = TokenType::_NOTEQUAL;
+                currentType = TokenType::_NOTEQUAL;
             }
             else {
-                type = TokenType::_NOT;
+                currentType = TokenType::_NOT;
             }
         }
 
         else if (source_code[i] == '+') {
-            type = TokenType::_ADD;
+            currentType = TokenType::_ADD;
         }
 
         else if (source_code[i] == '-') {
-            type = TokenType::_SUB;
+            currentType = TokenType::_SUB;
         }
 
         else if (source_code[i] == '*') {
-            type = TokenType::_MUL;
+            currentType = TokenType::_MUL;
         }
 
         else if (source_code[i] == '/') {
-            type = TokenType::_DIV;
+            currentType = TokenType::_DIV;
         }
 
         else if (source_code[i] == ';') {
-            type = TokenType::_SEMI;
+            currentType = TokenType::_SEMI;
         }
 
         else if (source_code[i] == '{') {
-            type = TokenType::_OPENCURLY;
+            currentType = TokenType::_OPENCURLY;
         }
 
         else if (source_code[i] == '}') {
-            type = TokenType::_CLOSECURLY;
+            currentType = TokenType::_CLOSECURLY;
         }
 
         else if (source_code[i] == '(') {
-            type = TokenType::_OPENBRACK;
+            currentType = TokenType::_OPENBRACK;
         }
 
         else if (source_code[i] == ')') {
-            type = TokenType::_CLOSEBRACK;
+            currentType = TokenType::_CLOSEBRACK;
         }
 
         else {
             varName += source_code[i];
             if (prevType != TokenType::_ID) {
-                type = TokenType::_ID;
+                currentType = TokenType::_ID;
             }
             else {
                 continue;
             }
         }
 
-        if (type != TokenType::_ID && varName != "") {
+        // when it reaches the end of parsing a variable.
+        if (currentType != TokenType::_ID && varName != "") {
             tokenList.back().varName = varName;
             varName = "";
         }
 
-        if (type != TokenType::_NUMCONST && numConstVal != "") {
-            tokenList.back().numConstVal = stoi(numConstVal); // i think this casting is unavoidable.
+        // when it reaches the end of parsing a numconst.
+        if (currentType != TokenType::_NUMCONST && numConstVal != "") {
+            tokenList.back().numConstVal = stoi(numConstVal); 
             numConstVal = "";
         }
 
+        // constructs final token object and adds to token stream.
         Token tokenObj;
-        tokenObj.type = type;
+        tokenObj.type = currentType;
         tokenList.push_back(tokenObj);
-        prevType = type;
+
+        prevType = currentType;
 
     }
 
@@ -996,29 +888,30 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
 }
 
 // recursive function to validate a provided grammar pattern for the current point in the token stream.
-// TO-DO: Probably rewrite without pointers, just put the object itself inside the vector.
+// CONSIDER: Rewrite without pointers, just put the object itself inside the vector.
 //inputPtr passed by reference gives a "global" effect.
-bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, CstNode* rootTreeNode, size_t& inputPtr, bool debugMode) {
+bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, CstNode* rootTreeNode, size_t& inputTokenPtr) {
+    size_t savedPtr;
+    bool valid;
+
     rootTreeNode->childrenNodes.clear();
-    
 
     for (std::variant<TokenType,CstNonTerminal>&component : pattern) { // by reference is more efficient.
-        
-        CstNode* newTreeNode = createCstNode(component);
+        CstNode* newTreeNode = new CstNode(component);
         rootTreeNode->childrenNodes.push_back(newTreeNode);
 
         // if a non terminal...
         if (!newTreeNode->isToken) {
-            bool valid = false;
+            valid = false;
 
             for (std::vector<std::variant<TokenType, CstNonTerminal>>&possiblePattern : patternList[std::get<CstNonTerminal>(component)]) {
-                size_t savedInputPtr = inputPtr;
-                if (validPattern(possiblePattern, newTreeNode, inputPtr, debugMode)) {
+                savedPtr = inputTokenPtr;
+                if (validPattern(possiblePattern, newTreeNode, inputTokenPtr)) {
                     valid = true;
                     break;
                 }
                 else {
-                    inputPtr = savedInputPtr;
+                    inputTokenPtr = savedPtr;
                 }
             }
             if (valid == false) {
@@ -1028,16 +921,15 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
 
         // if a token...
         else {
-            newTreeNode->token = tokenStream[inputPtr];
-            newTreeNode->isToken = true;
-
-            if (std::get<TokenType>(component) == tokenStream[inputPtr].type) {
-                inputPtr++;
+            newTreeNode->token = tokenStream[inputTokenPtr];
+            
+            if (std::get<TokenType>(component) == tokenStream[inputTokenPtr].type) { // correct token...
+                inputTokenPtr++;
             }
-            else if (std::get<TokenType>(component) == TokenType::_E) {
+            else if (std::get<TokenType>(component) == TokenType::_E) { // empty token...
                 continue;
             }
-            else {
+            else { // incorrect token...
                 return false;
             }
         }
@@ -1047,10 +939,10 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
 
 // returns the root node of the Concrete Syntax Tree or NULL in the event of a syntax error.
 CstNode* generateCST(bool debugMode) {
-    CstNode* rootNode = createCstNode(CstNonTerminal::COMPOUND_STMT);
-    size_t inputPtr = 0;
+    CstNode* rootNode = new CstNode(CstNonTerminal::COMPOUND_STMT);
+    size_t inputTokenPtr = 0; // points to the current token in the stream to be parsed.
 
-    if (!validPattern(patternList[CstNonTerminal::COMPOUND_STMT][0], rootNode, inputPtr, debugMode)) {
+    if (!validPattern(patternList[CstNonTerminal::COMPOUND_STMT][0], rootNode, inputTokenPtr)) {
         return NULL;
     }
     return rootNode;
