@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -5,12 +6,13 @@
 #include <vector>
 #include <map>
 #include <set>
-#include <cstring>
 #include <cassert>
 #include <variant>
+#include <array>
+#include <algorithm>
 
 // for now we're defining our source code as a variable - later we can parse it as a parameter to the compiler.
-std::string source_code = "C://Users//toby//Documents//Mars//test.clite";
+std::string source_code = "../test.clite";
 
 enum class CstNonTerminal {
     STMT,
@@ -75,7 +77,7 @@ enum class TokenType {
     _E
 };
 
-TokenType delimiters[] = { TokenType::_SEMI, TokenType::_OPENCURLY, TokenType::_CLOSECURLY, TokenType::_OPENBRACK,TokenType::_CLOSEBRACK, TokenType::_E };
+std::array<TokenType, 6> delimiters = { TokenType::_SEMI, TokenType::_OPENCURLY, TokenType::_CLOSECURLY, TokenType::_OPENBRACK,TokenType::_CLOSEBRACK, TokenType::_E };
 
 struct Token{
     TokenType type;
@@ -722,7 +724,7 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
     std::string varName;
     
     for (int i = 0; i < source_code.length(); i++) {
-        bool prevIsDelimiter = std::find(std::begin(delimiters), std::end(delimiters), prevType) != std::end(delimiters);
+        bool prevIsDelimiter = std::find(delimiters.begin(), delimiters.end(), prevType) != delimiters.end();
 
         if (source_code[i] == ' ' || source_code[i] == '\n') {
             continue;
