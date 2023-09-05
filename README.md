@@ -1,2 +1,2 @@
-# Mars-Compiler
+# MARS-Compiler
 Toby's Shitty Compiler
