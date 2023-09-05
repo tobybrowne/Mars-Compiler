@@ -15,8 +15,6 @@
 std::string source_code = "C://Users//toby//Documents//Mars//test.clite";
 
 
-
-
 enum class CstNonTerminal {
     STMT,
     EXP_STMT,
@@ -48,8 +46,6 @@ enum class CstNonTerminal {
     FACTOR,
     NULL_NONTERMINAL // to deal with undefined parameters.
 };
-
-
 
 // starting underscores indicate tokens, nothing else should have them.
 enum class TokenType {
@@ -85,7 +81,7 @@ enum class TokenType {
 };
 
 
-int inputPtr = 0;
+
 
 // add position of the token in the code to the object
 struct Token {
@@ -997,7 +993,8 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
 
 // recursive function to validate a provided grammar pattern for the current point in the token stream.
 // TO-DO: Probably rewrite without pointers, just put the object itself inside the vector.
-bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, CstNode* rootTreeNode, bool debugMode) {
+//inputPtr passed by reference gives a "global" effect.
+bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, CstNode* rootTreeNode, size_t& inputPtr, bool debugMode) {
     rootTreeNode->childrenNodes.clear();
     
 
@@ -1011,8 +1008,8 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
             bool valid = false;
 
             for (std::vector<std::variant<TokenType, CstNonTerminal>>&possiblePattern : patternList[std::get<CstNonTerminal>(component)]) {
-                int savedInputPtr = inputPtr;
-                if (validPattern(possiblePattern, newTreeNode, debugMode)) {
+                size_t savedInputPtr = inputPtr;
+                if (validPattern(possiblePattern, newTreeNode, inputPtr, debugMode)) {
                     valid = true;
                     break;
                 }
@@ -1047,8 +1044,9 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
 // returns the root node of the Concrete Syntax Tree or NULL in the event of a syntax error.
 CstNode* generateCST(bool debugMode) {
     CstNode* rootNode = createCstNode(CstNonTerminal::COMPOUND_STMT);
+    size_t inputPtr = 0;
 
-    if (!validPattern(patternList[CstNonTerminal::COMPOUND_STMT][0], rootNode, debugMode)) {
+    if (!validPattern(patternList[CstNonTerminal::COMPOUND_STMT][0], rootNode, inputPtr, debugMode)) {
         return NULL;
     }
     return rootNode;
