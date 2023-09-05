@@ -80,6 +80,8 @@ enum class TokenType {
     NULL_TOKEN, // for undefined parameters
 };
 
+TokenType delimiters[] = { TokenType::_SEMI, TokenType::_OPENCURLY, TokenType::_CLOSECURLY, TokenType::_OPENBRACK,TokenType::_CLOSEBRACK, TokenType::_E };
+
 
 
 
@@ -832,6 +834,8 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
     
     for (int i = 0; i < source_code.length(); i++) {
 
+        bool prevIsDelimiter = std::find(std::begin(delimiters), std::end(delimiters), prevType) != std::end(delimiters);
+
         if (source_code[i] == ' ' || source_code[i] == '\n') {
             continue;
         }
@@ -845,32 +849,32 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
             }
         }
 
-        else if (source_code.substr(i, 3) == "if(" && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
+        else if (source_code.substr(i, 3) == "if(" && prevIsDelimiter) {
             i += 1;
             type = TokenType::_IF;
         }
         
-        else if (source_code.substr(i, 5) == "else{" && (prevType == TokenType::_CLOSECURLY)) {
+        else if (source_code.substr(i, 5) == "else{" && prevIsDelimiter) {
             i += 3;
             type = TokenType::_ELSE;
         }
 
-        else if (source_code.substr(i, 6) == "while(" && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
+        else if (source_code.substr(i, 6) == "while(" && prevIsDelimiter) {
             i += 4;
             type = TokenType::_WHILE;
         }
 
-        else if ((source_code.substr(i, 7) == "return;" || source_code.substr(i, 7) == "return ") && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
+        else if ((source_code.substr(i, 7) == "return;" || source_code.substr(i, 7) == "return ") && prevIsDelimiter) {
             i += 5;
             type = TokenType::_RETURN;
         }
 
-        else if ((source_code.substr(i, 6) == "break;") && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E)) {
+        else if ((source_code.substr(i, 6) == "break;") && prevIsDelimiter) {
             i += 4;
             type = TokenType::_BREAK;
         }
 
-        else if ((source_code.substr(i, 4) == "int ") && (prevType == TokenType::_SEMI || prevType == TokenType::_CLOSECURLY || prevType == TokenType::_E || prevType == TokenType::_OPENCURLY)) {
+        else if ((source_code.substr(i, 4) == "int ") && prevIsDelimiter) {
             i += 3;
             type = TokenType::_INT;
         }
