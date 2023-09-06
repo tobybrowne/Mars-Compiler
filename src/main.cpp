@@ -12,7 +12,7 @@
 #include <algorithm>
 
 // for now we're defining our source code as a variable - later we can parse it as a parameter to the compiler.
-std::string source_code = "../test.clite";
+std::string source_code = "C:/Users/toby/Documents/Mars/test.clite";
 
 enum class CstNonTerminal {
     STMT,
@@ -196,22 +196,27 @@ NumConstNode::NumConstNode()
 // only used as a medium to return data from specific functions.
 // this way the classes stay type-safe, only storing one of the three operand types, but the code is much nicer.
 
+// forward reference required.
+class ExprNode;
+
+class NumVarExpr {
+public:
+    Operand type;
+    union {
+        NumConstNode* numconst;
+        VarNode* var;
+        ExprNode* expr;
+    } data;
+};
 
 class ExprNode {
 public:
     TokenType opcode; // use OpCode class instead for further validation?
     Operand aType;
     Operand bType;
-    union a {
-        VarNode* var;
-        ExprNode* expr;
-        NumConstNode* num;
-    } a;
-    union b {
-        VarNode* var;
-        ExprNode* expr;
-        NumConstNode* num;
-    } b;
+    NumVarExpr* a;
+    NumVarExpr* b;
+
     ExprNode();
     ExprNode(TokenType opcode, Operand aType, Operand bType);
     ~ExprNode();
@@ -220,40 +225,7 @@ public:
 
 ExprNode::ExprNode(TokenType opcode, Operand aType, Operand bType) : opcode(opcode), aType(aType), bType(bType)
 {
-    switch (aType) {
-    case Operand::VAR_NODE:
-    {
-        a.var = new VarNode;
-        break;
-    }
-    case Operand::EXPR_NODE:
-    {
-        a.expr = new ExprNode;
-        break;
-    }
-    case Operand::NUMCONST_NODE:
-    {
-        a.num = new NumConstNode;
-        break;
-    }
-    }
-    switch (bType) {
-    case Operand::VAR_NODE:
-    {
-        b.var = new VarNode;
-        break;
-    }
-    case Operand::EXPR_NODE:
-    {
-        b.expr = new ExprNode;
-        break;
-    }
-    case Operand::NUMCONST_NODE:
-    {
-        b.num = new NumConstNode;
-        break;
-    }
-    }
+    
 }
 
 ExprNode::ExprNode() {
@@ -262,51 +234,10 @@ ExprNode::ExprNode() {
 
 ExprNode::~ExprNode()
 {
-    switch (aType) {
-    case Operand::VAR_NODE:
-    {
-        delete a.var;
-        break;
-    }
-    case Operand::EXPR_NODE:
-    {
-        delete a.expr;
-        break;
-    }
-    case Operand::NUMCONST_NODE:
-    {
-        delete a.num;
-        break;
-    }
-    }
-    switch (bType) {
-    case Operand::VAR_NODE:
-    {
-        delete b.var;
-        break;
-    }
-    case Operand::EXPR_NODE:
-    {
-        delete b.expr;
-        break;
-    }
-    case Operand::NUMCONST_NODE:
-    {
-        delete b.num;
-        break;
-    }
-    }
+   
 }
 
-class NumVarExpr {
-    public:
-        Operand type;
-        union {
-            NumConstNode* numconst;
-            VarNode* var;
-            ExprNode* expr;
-        } data;
-};
+
 
 
 // it would only be worth splitting up the statements if we had plans for some sort of type checking.
@@ -328,11 +259,7 @@ class Stmt {
             struct {
                 VarNode* variable;
                 Operand initType;
-                union {
-                    VarNode* var;
-                    ExprNode* expr;
-                    NumConstNode* num;
-                } init;
+                NumVarExpr* init;
             } declNode;
 
             struct {
@@ -342,11 +269,8 @@ class Stmt {
 
             struct {
                 bool operandPresent = false;
-                union {
-                    VarNode* var;
-                    ExprNode* expr;
-                    NumConstNode* num;
-                } operand;
+                Operand operandType;
+                NumVarExpr* operand;
             } retNode;
             
         };
@@ -439,31 +363,8 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
         }
 
         ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
-
-        // nodes don't link to NumVarExpr types - just the actual operand type. 
-        switch (operand1->type) {
-            case Operand::VAR_NODE: {
-                newExprNode->a.var = operand1->data.var;
-            }
-            case Operand::EXPR_NODE: {
-                newExprNode->a.expr = operand1->data.expr;
-            }
-            case Operand::NUMCONST_NODE: {
-                newExprNode->a.num = operand1->data.numconst;
-            }
-        }
-
-        switch (operand2->type) {
-            case Operand::VAR_NODE: {
-                newExprNode->b.var = operand2->data.var;
-            }
-            case Operand::EXPR_NODE: {
-                newExprNode->b.expr = operand2->data.expr;
-            }
-            case Operand::NUMCONST_NODE: {
-                newExprNode->b.num = operand2->data.numconst;
-            }
-        }
+        newExprNode->a = operand1;
+        newExprNode->b = operand2;
 
         // creates expression node and returns it.
         NumVarExpr* newNumVarExpr = new NumVarExpr;
@@ -501,21 +402,8 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode) {
 
     newDeclNode->declNode.variable = new VarNode((varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName);
     NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2]);
-    Operand initType = init->type;
-
-    newDeclNode->declNode.initType = initType;
-
-    switch (initType) {
-        case Operand::VAR_NODE: {
-            newDeclNode->declNode.init.var = init->data.var;
-        }
-        case Operand::EXPR_NODE: {
-            newDeclNode->declNode.init.expr = init->data.expr;
-        }
-        case Operand::NUMCONST_NODE: {
-            newDeclNode->declNode.init.num = init->data.numconst;
-        }
-    }
+    newDeclNode->declNode.init = init;
+    newDeclNode->declNode.initType = init->type;
 
     return newDeclNode;
 }
@@ -597,18 +485,8 @@ Stmt* createReturnNodeAST(CstNode* cstRetStmt) {
         newRetNode->retNode.operandPresent = true;
 
         NumVarExpr* operand = createExprTreeAST(childrenNodes[1]);
-
-        switch (operand->type) {
-            case Operand::VAR_NODE: {
-                newRetNode->retNode.operand.var = operand->data.var;
-            }
-            case Operand::EXPR_NODE: {
-                newRetNode->retNode.operand.expr = operand->data.expr;
-            }
-            case Operand::NUMCONST_NODE: {
-                newRetNode->retNode.operand.num = operand->data.numconst;
-            }
-        }
+        newRetNode->retNode.operand = operand;
+        newRetNode->retNode.operandType = operand->type;
     }
     return newRetNode;
 }
@@ -662,7 +540,8 @@ std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtAS
 // generate AST and returns pointer to root node.
 Stmt* createAST(CstNode* cstRootNode) {
     // currently first node is always a compoundStmt node.
-    return createStmtSeqNodeAST(cstRootNode);
+    Stmt* astRootNode = createStmtSeqNodeAST(cstRootNode);
+    return astRootNode;
 }
 
 // eventually we can place this data structure into a separate header file.
@@ -939,7 +818,7 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
     return true;
 }
 
-// returns the root node of the Concrete Syntax Tree or NULL in the event of a syntax error.
+// returns the root nwode of the Concrete Syntax Tree or NULL in the event of a syntax error.
 CstNode* generateCST(bool debugMode) {
     CstNode* rootNode = new CstNode(CstNonTerminal::COMPOUND_STMT);
     size_t inputTokenPtr = 0; // points to the current token in the stream to be parsed.
@@ -987,16 +866,16 @@ int main() {
     }
     else {
         std::cout << "SYNTAX ERROR]" << std::endl;
+        return 1;
     }
 
 
-    std::cout << "Generating AST..." << std::endl;
+    std::cout << "Generating AST... [";;
     Stmt* astRootNode = createAST(cstRootNode);
-    std::cout << "DONE" << std::endl;
+    std::cout << "DONE]" << std::endl;
 
     getchar();
 
     //std::cout << countNodes(cstRootNode) << std::endl;
     return 0; 
 }
-
