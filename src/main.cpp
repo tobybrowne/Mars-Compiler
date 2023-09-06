@@ -101,7 +101,16 @@ class CstNode {
         Token token;
 
         CstNode(std::variant<TokenType, CstNonTerminal> e);
+        ~CstNode();
 };
+
+CstNode::~CstNode()
+{
+    // delete children...
+    for(CstNode* childNode : childrenNodes){
+        delete childNode;
+    }
+}
 
 CstNode::CstNode(std::variant<TokenType, CstNonTerminal> e) {
     // if token...
@@ -775,8 +784,6 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
     size_t savedPtr;
     bool valid;
 
-    rootTreeNode->childrenNodes.clear();
-
     for (std::variant<TokenType,CstNonTerminal>&component : pattern) { // by reference is more efficient.
         CstNode* newTreeNode = new CstNode(component);
         rootTreeNode->childrenNodes.push_back(newTreeNode);
@@ -785,6 +792,8 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
         if (!newTreeNode->isToken) {
             valid = false;
 
+            //check if component is valid
+            std::cout << "new component check" << std::endl;
             for (std::vector<std::variant<TokenType, CstNonTerminal>>&possiblePattern : patternList[std::get<CstNonTerminal>(component)]) {
                 savedPtr = inputTokenPtr;
                 if (validPattern(possiblePattern, newTreeNode, inputTokenPtr)) {
@@ -792,9 +801,16 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
                     break;
                 }
                 else {
+                    // reset pointer and deallocate the added children.
                     inputTokenPtr = savedPtr;
+                    for (CstNode* childNode : newTreeNode->childrenNodes) {
+                        delete childNode; // will recursively delete their childen too.
+                    }
+                    newTreeNode->childrenNodes.clear();
                 }
             }
+
+            // if component is invalid...
             if (valid == false) {
                 return false;
             }
@@ -855,7 +871,6 @@ int main() {
     std::cout << "DONE]" << std::endl;
 
     
-
     std::cout << "Generating CST... [";
     CstNode* cstRootNode = generateCST(debugMode);
     if (cstRootNode != NULL) {
