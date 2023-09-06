@@ -246,13 +246,13 @@ class Stmt {
         Statement type;
         union {
             struct {
-                ExprNode* condition;
+                NumVarExpr* condition;
                 Stmt* ifBody;
                 Stmt* elseBody;
             } ifNode;
 
             struct {
-                ExprNode* condition;
+                NumVarExpr* condition;
                 Stmt* body;
             } whileNode;
 
@@ -452,7 +452,7 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
 
     Stmt* newIfNode = new Stmt(Statement::IF_NODE);
 
-    newIfNode->ifNode.condition = createExprTreeAST(childrenNodes[2])->data.expr; // is this always an expression?
+    newIfNode->ifNode.condition = createExprTreeAST(childrenNodes[2]); // is this always an expression?
 
     newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[4]);
 
@@ -469,7 +469,7 @@ Stmt* createWhileNodeToAST(CstNode* cstIterStmt) {
     std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
 
     Stmt* newWhileNode = new Stmt(Statement::WHILE_NODE);
-    newWhileNode->whileNode.condition = createExprTreeAST(childrenNodes[2])->data.expr;
+    newWhileNode->whileNode.condition = createExprTreeAST(childrenNodes[2]);
     newWhileNode->whileNode.body = createStmtSeqNodeAST(childrenNodes[4]);
 
     return newWhileNode;
@@ -828,9 +828,6 @@ CstNode* generateCST(bool debugMode) {
     }
     return rootNode;
 }
-
-
-
 
 int main() {
     defineLanguageGrammar();
