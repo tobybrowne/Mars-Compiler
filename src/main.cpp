@@ -209,26 +209,31 @@ NumConstNode::NumConstNode()
 class ExprNode;
 
 class NumVarExpr {
-public:
-    Operand type;
-    union {
-        NumConstNode* numconst;
-        VarNode* var;
-        ExprNode* expr;
-    } data;
+    public:
+        Operand type;
+        union {
+            NumConstNode* numconst;
+            VarNode* var;
+            ExprNode* expr;
+        } data;
+
+        ~NumVarExpr();
 };
 
-class ExprNode {
-public:
-    TokenType opcode; // use OpCode class instead for further validation?
-    Operand aType;
-    Operand bType;
-    NumVarExpr* a;
-    NumVarExpr* b;
 
-    ExprNode();
-    ExprNode(TokenType opcode, Operand aType, Operand bType);
-    ~ExprNode();
+
+
+class ExprNode {
+    public:
+        TokenType opcode; // use OpCode class instead for further validation?
+        Operand aType;
+        Operand bType;
+        NumVarExpr* a;
+        NumVarExpr* b;
+
+        ExprNode();
+        ExprNode(TokenType opcode, Operand aType, Operand bType);
+        ~ExprNode();
 };
 
 
@@ -243,8 +248,30 @@ ExprNode::ExprNode() {
 
 ExprNode::~ExprNode()
 {
-   
+    delete a;
+    delete b;
 }
+
+NumVarExpr::~NumVarExpr() {
+    switch (type) {
+        case(Operand::VAR_NODE): {
+            std::cout << "delete var" << std::endl;
+            delete data.var;
+            break;
+        }
+        case(Operand::EXPR_NODE): {
+            std::cout << "delete expr" << std::endl;
+            delete data.expr;
+            break;
+        }
+        case(Operand::NUMCONST_NODE): {
+            std::cout << "delete num" << std::endl;
+            delete data.numconst;
+            break;
+        }
+    }
+}
+
 
 
 
@@ -255,6 +282,7 @@ class Stmt {
         Statement type;
         union {
             struct {
+                bool elsePresent = false;
                 NumVarExpr* condition;
                 Stmt* ifBody;
                 Stmt* elseBody;
@@ -272,7 +300,6 @@ class Stmt {
             } declNode;
 
             struct {
-                std::vector<int> numbers;
                 std::vector<Stmt*> stmts;
             } seqNode;
 
@@ -298,11 +325,47 @@ Stmt::Stmt(Statement stmtType): type(stmtType) {
 
 Stmt::~Stmt() {
     switch (type) {
-        case Statement::STMTSEQ_NODE: {
-            delete (&seqNode.stmts);
+        case(Statement::IF_NODE): {
+            std::cout << "if node destr." << std::endl;
+            delete ifNode.condition;
+            delete ifNode.ifBody;
+            if (ifNode.elsePresent == true) {
+                delete ifNode.elseBody;
+            }
             break;
         }
+        case(Statement::WHILE_NODE): {
+            std::cout << "while node destr." << std::endl;
+            delete whileNode.condition;
+            delete whileNode.body;
+            break;
+        }
+        case(Statement::DECL_NODE): {
+            std::cout << "decl node destr." << std::endl;
+            delete declNode.variable;
+            delete declNode.init;
+            break;
+        }
+        case(Statement::STMTSEQ_NODE): {
+            std::cout << "stmt seq destr." << std::endl;
+            std::vector<Stmt*> stmtVector = seqNode.stmts;
+            std::cout << "VECTOR SIZE: " << seqNode.stmts.size() << std::endl;
+
+            for (int i = 0; i < seqNode.stmts.size(); i++) {
+                delete seqNode.stmts[i];
+            }
+            break;
+        }
+        case(Statement::RET_NODE): {
+            std::cout << "return node destr." << std::endl;
+            if (retNode.operandPresent) {
+                delete retNode.operand;
+            }
+            break;
+        }
+
     }
+       
 }
 
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
@@ -467,6 +530,7 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt) {
 
     // if else statement is present...
     if (childrenNodes.size() == 7) {
+        newIfNode->ifNode.elsePresent = true;
         newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[6]);
     }
 
@@ -550,6 +614,7 @@ std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtAS
 Stmt* createAST(CstNode* cstRootNode) {
     // currently first node is always a compoundStmt node.
     Stmt* astRootNode = createStmtSeqNodeAST(cstRootNode);
+    std::cout << "finish" << std::endl;
     return astRootNode;
 }
 
@@ -793,7 +858,6 @@ bool validPattern(std::vector<std::variant<TokenType, CstNonTerminal>> pattern, 
             valid = false;
 
             //check if component is valid
-            std::cout << "new component check" << std::endl;
             for (std::vector<std::variant<TokenType, CstNonTerminal>>&possiblePattern : patternList[std::get<CstNonTerminal>(component)]) {
                 savedPtr = inputTokenPtr;
                 if (validPattern(possiblePattern, newTreeNode, inputTokenPtr)) {
@@ -881,8 +945,7 @@ int main() {
         return 1;
     }
 
-
-    std::cout << "Generating AST... [";;
+    std::cout << "Generating AST... [";
     Stmt* astRootNode = createAST(cstRootNode);
     std::cout << "DONE]" << std::endl;
 
