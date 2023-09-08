@@ -10,6 +10,7 @@
 #include <variant>
 #include <array>
 #include <algorithm>
+#include <cwctype>
 
 // for now we're defining our source code as a variable - later we can parse it as a parameter to the compiler.
 std::string source_code = "C:/Users/toby/Documents/Mars/test.clite";
@@ -77,7 +78,7 @@ enum class TokenType {
     _E
 };
 
-std::array<TokenType, 6> delimiters = { TokenType::_SEMI, TokenType::_OPENCURLY, TokenType::_CLOSECURLY, TokenType::_OPENBRACK,TokenType::_CLOSEBRACK, TokenType::_E };
+
 
 struct Token{
     TokenType type;
@@ -666,177 +667,185 @@ void defineLanguageGrammar() {
     patternList[CstNonTerminal::FACTOR] = { {TokenType::_NUMCONST}, {TokenType::_ID} };
 }
 
+bool isNumber(std::string s){
+    for (char ch : s) {
+        if (std::isdigit(ch) == 0)
+            return false;
+    }
+    return true;
+}
+
+
 // tokenizer can't tolerate indentation atm.
 // converts the provided source code string into a vector of tokens.
 std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
     std::vector<Token> tokenList;
-    TokenType prevType = TokenType::_E;
     TokenType currentType;
+    bool numConst;
+    std::string alphanumeric;
 
-    std::string numConstVal; // this has to be a string so it can be appended to.
-    std::string varName;
-    
     for (int i = 0; i < source_code.length(); i++) {
-        bool prevIsDelimiter = std::find(delimiters.begin(), delimiters.end(), prevType) != delimiters.end();
-
-        if (source_code[i] == ' ' || source_code[i] == '\n') {
+        
+        // ignores whitespace, new lines and indentation.
+        if (source_code[i] == ' ' || source_code[i] == '\n' || source_code[i] == '\t') {
             continue;
         }
-        else if (isdigit(source_code[i])) {
-            numConstVal += source_code[i];
-            if (prevType != TokenType::_NUMCONST) {
-                currentType = TokenType::_NUMCONST;
-            }
-            else {
-                continue;
-            }
-        }
 
-        else if (source_code.substr(i, 3) == "if(" && prevIsDelimiter) {
-            i += 1;
-            currentType = TokenType::_IF;
-        }
-        
-        else if (source_code.substr(i, 5) == "else{" && prevIsDelimiter) {
-            i += 3;
-            currentType = TokenType::_ELSE;
-        }
-
-        else if (source_code.substr(i, 6) == "while(" && prevIsDelimiter) {
-            i += 4;
-            currentType = TokenType::_WHILE;
-        }
-
-        else if ((source_code.substr(i, 7) == "return;" || source_code.substr(i, 7) == "return ") && prevIsDelimiter) {
-            i += 5;
-            currentType = TokenType::_RETURN;
-        }
-
-        else if ((source_code.substr(i, 6) == "break;") && prevIsDelimiter) {
-            i += 4;
-            currentType = TokenType::_BREAK;
-        }
-
-        else if ((source_code.substr(i, 4) == "int ") && prevIsDelimiter) {
-            i += 3;
-            currentType = TokenType::_INT;
-        }
-
+        // tokenizing punctuation
         else if (source_code.substr(i, 2) == "&&") {
-            i += 1;
-            currentType = TokenType::_AND;
+        i += 1;
+        currentType = TokenType::_AND;
         }
 
         else if (source_code.substr(i, 2) == "||") {
-            i += 1;
-            currentType = TokenType::_OR;
+        i += 1;
+        currentType = TokenType::_OR;
         }
 
         else if (source_code[i] == '<') {
-            if (source_code[i + 1] == '=') {
-                i += 1;
-                currentType = TokenType::_LE;
-            }
-            else {
-                currentType = TokenType::_LT;
-            }
+        if (source_code[i + 1] == '=') {
+            i += 1;
+            currentType = TokenType::_LE;
+        }
+        else {
+            currentType = TokenType::_LT;
+        }
         }
 
         else if (source_code[i] == '>') {
-            if (source_code[i + 1] == '=') {
-                i += 1;
-                currentType = TokenType::_GE;
-            }
-            else {
-                currentType = TokenType::_GT;
-            }
+        if (source_code[i + 1] == '=') {
+            i += 1;
+            currentType = TokenType::_GE;
+        }
+        else {
+            currentType = TokenType::_GT;
+        }
         }
 
         else if (source_code[i] == '=') {
-            if (source_code[i + 1] == '=') {
-                i += 1;
-                currentType = TokenType::_EQUAL;
-            }
-            else {
-                currentType = TokenType::_ASSIGN;
-            }
+        if (source_code[i + 1] == '=') {
+            i += 1;
+            currentType = TokenType::_EQUAL;
+        }
+        else {
+            currentType = TokenType::_ASSIGN;
+        }
         }
 
         else if (source_code[i] == '!') {
-            if (source_code[i + 1] == '=') {
-                i += 1;
-                currentType = TokenType::_NOTEQUAL;
-            }
-            else {
-                currentType = TokenType::_NOT;
-            }
+        if (source_code[i + 1] == '=') {
+            i += 1;
+            currentType = TokenType::_NOTEQUAL;
+        }
+        else {
+            currentType = TokenType::_NOT;
+        }
         }
 
         else if (source_code[i] == '+') {
-            currentType = TokenType::_ADD;
+        currentType = TokenType::_ADD;
         }
 
         else if (source_code[i] == '-') {
-            currentType = TokenType::_SUB;
+        currentType = TokenType::_SUB;
         }
 
         else if (source_code[i] == '*') {
-            currentType = TokenType::_MUL;
+        currentType = TokenType::_MUL;
         }
 
         else if (source_code[i] == '/') {
-            currentType = TokenType::_DIV;
+        currentType = TokenType::_DIV;
         }
 
         else if (source_code[i] == ';') {
-            currentType = TokenType::_SEMI;
+        currentType = TokenType::_SEMI;
         }
 
         else if (source_code[i] == '{') {
-            currentType = TokenType::_OPENCURLY;
+        currentType = TokenType::_OPENCURLY;
         }
 
         else if (source_code[i] == '}') {
-            currentType = TokenType::_CLOSECURLY;
+        currentType = TokenType::_CLOSECURLY;
         }
 
         else if (source_code[i] == '(') {
-            currentType = TokenType::_OPENBRACK;
+        currentType = TokenType::_OPENBRACK;
         }
 
         else if (source_code[i] == ')') {
-            currentType = TokenType::_CLOSEBRACK;
+        currentType = TokenType::_CLOSEBRACK;
+        }
+
+        // if not punctuation...
+        else if (iswalnum(source_code[i]) || source_code[i] == '_') {
+            numConst = false;
+            alphanumeric = "";
+            
+            if (std::isdigit(source_code[i])) {
+                numConst = true;
+            }
+            
+            // while still a var or numconst
+            while (iswalnum(source_code[i]) || source_code[i] == '_') {
+                // var starting with number not allowed.
+                if (std::isdigit(source_code[i]) == false && numConst == true) {
+                    // lexer error
+                    return {};
+                }
+                alphanumeric += source_code[i];
+                i++;
+            }
+            i--; // delimimter still needs to be processed.
+
+            if (numConst == true) {
+                currentType = TokenType::_NUMCONST;
+            }
+
+            else {
+                // if keyword
+                if (alphanumeric == "if") {
+                    currentType = TokenType::_IF;
+                }
+                else if (alphanumeric == "else") {
+                    currentType = TokenType::_ELSE;
+                }
+                else if (alphanumeric == "while") {
+                    currentType = TokenType::_WHILE;
+                }
+                else if (alphanumeric == "return") {
+                    currentType = TokenType::_RETURN;
+                }
+                else if (alphanumeric == "break") {
+                    currentType = TokenType::_BREAK;
+                }
+                else if (alphanumeric == "int") {
+                    currentType = TokenType::_INT;
+                }
+                // if id.
+                else {
+                    currentType = TokenType::_ID;
+                }
+            }
         }
 
         else {
-            varName += source_code[i];
-            if (prevType != TokenType::_ID) {
-                currentType = TokenType::_ID;
-            }
-            else {
-                continue;
-            }
+            return {};
         }
 
-        // when it reaches the end of parsing a variable.
-        if (currentType != TokenType::_ID && varName != "") {
-            tokenList.back().varName = varName;
-            varName = "";
-        }
-
-        // when it reaches the end of parsing a numconst.
-        if (currentType != TokenType::_NUMCONST && numConstVal != "") {
-            tokenList.back().numConstVal = stoi(numConstVal); 
-            numConstVal = "";
-        }
-
-        // constructs final token object and adds to token stream.
+        // creating token
         Token tokenObj;
         tokenObj.type = currentType;
+
+        if (currentType == TokenType::_ID) {
+            tokenObj.varName = alphanumeric;
+        }
+        else if (currentType == TokenType::_NUMCONST) {
+            tokenObj.numConstVal = stoi(alphanumeric);
+        }
+
         tokenList.push_back(tokenObj);
-
-        prevType = currentType;
-
     }
 
     return tokenList;
@@ -932,6 +941,11 @@ int main() {
 
     std::cout << "Tokenizing Source Code... [";
     tokenStream = tokenize(contents, true);
+    if (tokenStream.size() == 0) {
+        std::cout << "LEXER ERROR]" << std::endl;
+       
+        getchar();
+    }
     std::cout << "DONE]" << std::endl;
 
     
@@ -942,7 +956,8 @@ int main() {
     }
     else {
         std::cout << "SYNTAX ERROR]" << std::endl;
-        return 1;
+        
+        getchar();
     }
 
     std::cout << "Generating AST... [";
