@@ -78,8 +78,6 @@ enum class TokenType {
     _E
 };
 
-
-
 struct Token{
     TokenType type;
     // only one can be true at a time so use a union to save memory?!?
@@ -146,12 +144,17 @@ enum class Operand {
 
 enum class Statement {
     DECL_NODE,
+    ASSIGN_NODE,
     IF_NODE,
     WHILE_NODE,
     STMT_NODE,
     STMTSEQ_NODE,
     RET_NODE,
     BREAK_NODE,
+};
+
+enum class Datatype {
+    INT
 };
 
 // Don't conflate with token types, crossover but different.
@@ -241,6 +244,7 @@ class ExprNode {
 ExprNode::ExprNode(TokenType opcode, Operand aType, Operand bType) : opcode(opcode), aType(aType), bType(bType)
 {
     
+
 }
 
 ExprNode::ExprNode() {
@@ -295,10 +299,19 @@ class Stmt {
             } whileNode;
 
             struct {
+                Datatype type;
                 VarNode* variable;
-                Operand initType;
                 NumVarExpr* init;
             } declNode;
+
+            struct {
+                VarNode* variable;
+                bool furtherAssign;
+                union { 
+                    NumVarExpr* exprTree; 
+                    Stmt* assignNode;
+                } init;
+            } assignNode;
 
             struct {
                 std::vector<Stmt*> stmts;
@@ -454,20 +467,33 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
 }
 
 // converts CST expStmt to an expression node.
-//AstNode* addExprNodeToAST(CstNode* cstExprStmt) {
-//    // probably use a different name for childrenNodes.
-//    std::vector<CstNode*> childrenNodes = cstExprStmt->childrenNodes;
-//
-//    if (childrenNodes.size() == 3) { // exp part of grammar...
-//        AstNode* varNode = createVarNode(childrenNodes[0]->childrenNodes[0]->val);
-//        AstNode* operand2 = addExprNodeToAST(childrenNodes[0]->childrenNodes[2]);
-//        return createExprNode(varNode, operand2, "_assign");
-//    }
-//
-//    else if (childrenNodes[0]->val == "simpleExp") {
-//        return addExprTreeToAST(childrenNodes[0]);
-//    }
-//}
+Stmt* createAssignNodeAST(CstNode* exp) { 
+    // probably use a different name for childrenNodes.
+    if (exp->childrenNodes.size() == 1) {
+        std::cout << "hi" << std::endl;
+        return NULL;
+    }
+
+    std::cout << "create assign node" << std::endl;
+    Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
+    newAssignNode->assignNode.variable = new VarNode(exp->childrenNodes[0]->token.varName);
+    CstNode* furtherExp = exp->childrenNodes[2];
+
+    // further assign...
+    if (furtherExp->childrenNodes.size() == 3) {
+
+        newAssignNode->assignNode.furtherAssign = true;
+        newAssignNode->assignNode.init.assignNode = createAssignNodeAST(furtherExp);
+    }
+    // simpleExp...
+    else {
+        std::cout << "create simple exp" << std::endl;
+        newAssignNode->assignNode.furtherAssign = false;
+        newAssignNode->assignNode.init.exprTree = createExprTreeAST(furtherExp->childrenNodes[0]);
+    }
+    
+    return newAssignNode;
+}
 
 // creates a variable declaration node.
 Stmt* createVarDeclNodeAST(CstNode* varDeclNode) {
@@ -476,7 +502,6 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode) {
     newDeclNode->declNode.variable = new VarNode((varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName);
     NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2]);
     newDeclNode->declNode.init = init;
-    newDeclNode->declNode.initType = init->type;
 
     return newDeclNode;
 }
@@ -570,16 +595,20 @@ Stmt* createBreakNodeAST(CstNode* cstIterStmt){
     return new Stmt(Statement::BREAK_NODE);;
 }
 
-// takes a "stmt" non terminal and creates the correct stmt node.
+// takes a "stmt" non terminal and creates the correct stmt node.;
 Stmt* createStmtNodeAST(CstNode* stmtNodeAST) {
     CstNode* specificStmt = stmtNodeAST->childrenNodes[0];
     CstNonTerminal stmtType = specificStmt->val.nonTerm;
 
+   
     switch (stmtType) {
         case(CstNonTerminal::EXP_STMT):
-            // add later...
-            /*return addExprNodeToAST(specificStmt);*/
-
+            if (specificStmt->childrenNodes.size() == 1) {
+                std::cout << "hola" << std::endl;
+                return NULL;
+            }
+            return createAssignNodeAST(specificStmt->childrenNodes[0]);
+            
         case(CstNonTerminal::COMPOUND_STMT):
             return createStmtSeqNodeAST(specificStmt);
 
@@ -605,7 +634,10 @@ std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtAS
         return smtASTNodeVector;
     }
     else {
-        smtASTNodeVector.push_back(createStmtNodeAST(childrenNodes[0])); // manages stmtDecl...
+        Stmt* newStmtNode = createStmtNodeAST(childrenNodes[0]);
+        if (newStmtNode != NULL) {
+            smtASTNodeVector.push_back(newStmtNode);
+        }
         smtASTNodeVector = createStmtListAST(childrenNodes[1], smtASTNodeVector); // manages furtherstmtDecl
         return smtASTNodeVector;
     }
@@ -723,23 +755,23 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
         }
 
         else if (source_code[i] == '=') {
-        if (source_code[i + 1] == '=') {
-            i += 1;
-            currentType = TokenType::_EQUAL;
-        }
-        else {
-            currentType = TokenType::_ASSIGN;
-        }
+            if (source_code[i + 1] == '=') {
+                i += 1;
+                currentType = TokenType::_EQUAL;
+            }
+            else {
+                currentType = TokenType::_ASSIGN;
+            }
         }
 
         else if (source_code[i] == '!') {
-        if (source_code[i + 1] == '=') {
-            i += 1;
-            currentType = TokenType::_NOTEQUAL;
-        }
-        else {
-            currentType = TokenType::_NOT;
-        }
+            if (source_code[i + 1] == '=') {
+                i += 1;
+                currentType = TokenType::_NOTEQUAL;
+            }
+            else {
+                currentType = TokenType::_NOT;
+            }
         }
 
         else if (source_code[i] == '+') {
@@ -943,7 +975,6 @@ int main() {
     tokenStream = tokenize(contents, true);
     if (tokenStream.size() == 0) {
         std::cout << "LEXER ERROR]" << std::endl;
-       
         getchar();
     }
     std::cout << "DONE]" << std::endl;
