@@ -508,7 +508,6 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
 Stmt* createAssignNodeAST(CstNode* exp) { 
     // probably use a different name for childrenNodes.
     if (exp->childrenNodes.size() == 1) {
-        std::cout << "hi" << std::endl;
         return NULL;
     }
 
@@ -557,7 +556,8 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
     std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
 
     if (varDeclared(symbolTable, varName)) {
-        // throw error - already declared
+        std::cout << "VARIABLE "<< varName << " DECLARED TWICE!]" << std::endl;
+        getchar();
     }
 
 
@@ -737,8 +737,6 @@ Stmt* createAST(CstNode* cstRootNode) {
     // starts in the global scope.
     SymbolTable* globalTable = new SymbolTable();
     Stmt* astRootNode = createStmtSeqNodeAST(cstRootNode, globalTable);
-
-
 
     std::cout << "finish" << std::endl;
     return astRootNode;
