@@ -438,6 +438,22 @@ bool expressionInUse(CstNode* cstExprNode) {
     }  
 }
 
+TableEntry* getTblEntry(SymbolTable* currentTable, std::string varName) {
+    for (TableEntry* entry : currentTable->entries) {
+        if (entry->classType == ClassType::VARIABLE && entry->name == varName) {
+            return entry;
+        }
+    }
+
+    // if not found in current table.
+    if (currentTable->upperTable == NULL) {
+        return NULL;
+    }
+    else {
+        return getTblEntry(currentTable->upperTable, varName);
+    }
+}
+
 // this is required because sometimes the opcode has a parent node like "relOp", sometimes it does not.
 TokenType findOpcode(CstNode* cstExprNode) {
     if (cstExprNode->isToken) {
@@ -449,7 +465,7 @@ TokenType findOpcode(CstNode* cstExprNode) {
 }
 
 // converts CST expression tree into an AST expression tree.
-NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
+NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable) {
     CstNonTerminal expressionType = cstExpr->val.nonTerm;
     std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
 
@@ -464,7 +480,14 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
         }
         else if (factorType == TokenType::_ID) {
             newNumVarExpr->type = Operand::VAR_NODE;
-            newNumVarExpr->data.var = new VarNode(factorToken.varName, NULL); // fix this.
+            TableEntry* tblEntry = getTblEntry(symbolTable, factorToken.varName);
+
+            if (tblEntry == NULL) {
+                std::cout << "VARIABLE " << factorToken.varName << " NOT DECLARED!]" << std::endl;
+                getchar();
+            }
+
+            newNumVarExpr->data.var = new VarNode(factorToken.varName, tblEntry); // fix this.
         }
         return newNumVarExpr;
     }
@@ -476,13 +499,13 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
         TokenType opcode;
 
         if (expressionType == CstNonTerminal::UNARY_REL_EXP) {
-            operand1 = createExprTreeAST(childrenNodes[1]);
+            operand1 = createExprTreeAST(childrenNodes[1], symbolTable);
             operand2 = operand1;
             opcode = findOpcode(childrenNodes[0]);
         }
         else {
-            operand1 = createExprTreeAST(childrenNodes[0]);
-            operand2 = createExprTreeAST(childrenNodes[1]->childrenNodes[1]);
+            operand1 = createExprTreeAST(childrenNodes[0], symbolTable);
+            operand2 = createExprTreeAST(childrenNodes[1]->childrenNodes[1], symbolTable);
             opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
         }
 
@@ -500,53 +523,58 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr) {
     
     // not in use...
     else {
-        return createExprTreeAST(childrenNodes[0]);
+        return createExprTreeAST(childrenNodes[0], symbolTable);
     } 
 }
 
+
 // converts CST expStmt to an expression node.
-Stmt* createAssignNodeAST(CstNode* exp) { 
+Stmt* createAssignNodeAST(CstNode* exp, SymbolTable* symbolTable) { 
     // probably use a different name for childrenNodes.
     if (exp->childrenNodes.size() == 1) {
         return NULL;
     }
 
-    std::cout << "create assign node" << std::endl;
     Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
-    newAssignNode->assignNode.variable = new VarNode(exp->childrenNodes[0]->token.varName, NULL); // fix this
+    std::string varName = exp->childrenNodes[0]->token.varName;
+    TableEntry* tblEntry = getTblEntry(symbolTable, varName);
+
+    if (tblEntry == NULL) {
+        std::cout << "VARIABLE " << varName << " NOT DECLARED!]" << std::endl;
+        getchar();
+    }
+
+    newAssignNode->assignNode.variable = new VarNode(varName, tblEntry); // fix this
     CstNode* furtherExp = exp->childrenNodes[2];
 
     // further assign...
     if (furtherExp->childrenNodes.size() == 3) {
 
         newAssignNode->assignNode.furtherAssign = true;
-        newAssignNode->assignNode.init.assignNode = createAssignNodeAST(furtherExp);
+        newAssignNode->assignNode.init.assignNode = createAssignNodeAST(furtherExp, symbolTable);
     }
     // simpleExp...
     else {
         std::cout << "create simple exp" << std::endl;
         newAssignNode->assignNode.furtherAssign = false;
-        newAssignNode->assignNode.init.exprTree = createExprTreeAST(furtherExp->childrenNodes[0]);
+        newAssignNode->assignNode.init.exprTree = createExprTreeAST(furtherExp->childrenNodes[0], symbolTable);
     }
     
     return newAssignNode;
 }
 
-bool varDeclared(SymbolTable* currentTable, std::string varName) {
+
+
+
+bool varDeclaredInScope(SymbolTable* currentTable, std::string varName) {
     for (TableEntry* entry : currentTable->entries) {
         if (entry->classType == ClassType::VARIABLE && entry->name == varName) {
             return true;
         }
     }
-
-    // if not found in current table.
-    if (currentTable->upperTable == NULL) {
-        return false;
-    }
-    else {
-        return varDeclared(currentTable->upperTable, varName);
-    }
+    return false;
 }
+
 
 // creates a variable declaration node.
 Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
@@ -555,7 +583,7 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
     // create varNode...
     std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
 
-    if (varDeclared(symbolTable, varName)) {
+    if (varDeclaredInScope(symbolTable, varName)) {
         std::cout << "VARIABLE "<< varName << " DECLARED TWICE!]" << std::endl;
         getchar();
     }
@@ -569,7 +597,9 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
             dataType = Datatype::INT;
     }
 
-    
+    // this must be calculated before the table entry is made.
+    NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
+
     // add to symbol table...
     TableEntry* newSymTblEntry = new TableEntry;
     newSymTblEntry->name = varName;
@@ -582,7 +612,7 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
     symbolTable->currFrameOffset++;
 
     newDeclNode->declNode.variable = new VarNode(varName, newSymTblEntry);
-    NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2]);
+    
     newDeclNode->declNode.init = init;
 
     return newDeclNode;
@@ -638,7 +668,7 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt, SymbolTable* symbolTable) {
 
     Stmt* newIfNode = new Stmt(Statement::IF_NODE);
 
-    newIfNode->ifNode.condition = createExprTreeAST(childrenNodes[2]); // is this always an expression?
+    newIfNode->ifNode.condition = createExprTreeAST(childrenNodes[2], symbolTable); // is this always an expression?
 
     newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[4], symbolTable);
 
@@ -656,14 +686,14 @@ Stmt* createWhileNodeToAST(CstNode* cstIterStmt, SymbolTable* symbolTable) {
     std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
 
     Stmt* newWhileNode = new Stmt(Statement::WHILE_NODE);
-    newWhileNode->whileNode.condition = createExprTreeAST(childrenNodes[2]);
+    newWhileNode->whileNode.condition = createExprTreeAST(childrenNodes[2], symbolTable);
     newWhileNode->whileNode.body = createStmtSeqNodeAST(childrenNodes[4], symbolTable);
 
     return newWhileNode;
 }
 
 // creates AST return node from CST node.
-Stmt* createReturnNodeAST(CstNode* cstRetStmt) {
+Stmt* createReturnNodeAST(CstNode* cstRetStmt, SymbolTable* symbolTable) {
     std::vector<CstNode*> childrenNodes = cstRetStmt->childrenNodes;
 
     Stmt* newRetNode = new Stmt(Statement::RET_NODE);
@@ -671,7 +701,7 @@ Stmt* createReturnNodeAST(CstNode* cstRetStmt) {
     if (childrenNodes.size() == 3) { // if return statement has operand.
         newRetNode->retNode.operandPresent = true;
 
-        NumVarExpr* operand = createExprTreeAST(childrenNodes[1]);
+        NumVarExpr* operand = createExprTreeAST(childrenNodes[1], symbolTable);
         newRetNode->retNode.operand = operand;
         newRetNode->retNode.operandType = operand->type;
     }
@@ -695,7 +725,7 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable) {
                 std::cout << "hola" << std::endl;
                 return NULL;
             }
-            return createAssignNodeAST(specificStmt->childrenNodes[0]);
+            return createAssignNodeAST(specificStmt->childrenNodes[0], symbolTable);
             
         case(CstNonTerminal::COMPOUND_STMT):
             return createStmtSeqNodeAST(specificStmt, symbolTable);
@@ -707,7 +737,7 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable) {
             return createWhileNodeToAST(specificStmt, symbolTable);
 
         case(CstNonTerminal::RETURN_STMT):
-            return createReturnNodeAST(specificStmt);
+            return createReturnNodeAST(specificStmt, symbolTable);
 
         case(CstNonTerminal::BREAK_STMT):
             return createBreakNodeAST(specificStmt);
