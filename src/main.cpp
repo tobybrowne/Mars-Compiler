@@ -11,9 +11,109 @@
 #include <array>
 #include <algorithm>
 #include <cwctype>
+#include <unordered_map>
 
 // for now we're defining our source code as a variable - later we can parse it as a parameter to the compiler.
 std::string source_code = "C:/Users/toby/Documents/Mars/test.clite";
+
+enum class InstrType {
+    LDR,
+    STR,
+    ADD,
+    MUL,
+    MOV,
+    SUB,
+    DIV
+};
+
+std::unordered_map<InstrType, std::string> instrString = {
+    {InstrType::LDR, "LDR"},
+    {InstrType::STR, "STR"},
+    {InstrType::MOV, "MOV"},
+    {InstrType::ADD, "ADD"},
+    {InstrType::MUL, "MUL"},
+    {InstrType::DIV, "DIV"},
+    {InstrType::SUB, "SUB"},
+};
+
+enum class Register {
+    RAX,
+    RBX,
+};
+
+std::unordered_map<Register, std::string> regString = {
+    {Register::RAX, "RAX"},
+    {Register::RBX, "RBX"}
+};
+
+enum class x86OperandTypes {
+    REGISTER,
+    IMMEDIATE,
+    STACK_OFFSET,
+    EMPTY
+};
+
+class x86operand {
+public:
+    x86OperandTypes type;
+    union {
+        Register reg;
+        int imm;
+        int offset;
+    };
+
+    // default prevents linker errors.
+    x86operand() = default;
+
+    x86operand(x86OperandTypes inpType, std::variant<Register, int> inpData) {
+        type = inpType;
+        if (inpType == x86OperandTypes::REGISTER) {
+            reg = std::get<Register>(inpData);
+        }
+        else if (inpType == x86OperandTypes::IMMEDIATE) {
+            imm = std::get<int>(inpData);
+        }
+        else {
+            offset = std::get<int>(inpData);
+        }
+    };
+
+    x86operand(x86operand& t)  
+    {
+        type = t.type;
+        if (type == x86OperandTypes::REGISTER) {
+            reg = t.reg;
+        }
+        else if (type == x86OperandTypes::IMMEDIATE) {
+            imm = t.imm;
+        }
+        else {
+            offset = t.offset;
+        }
+    };
+};
+
+
+class Instr {
+    public:
+        InstrType type;
+        x86operand op1;
+        x86operand op2;
+        std::optional<x86operand> op3; // can be null or operand
+
+        Instr(InstrType inpType, x86operand inpOp1, x86operand inpOp2, std::optional<x86operand> inOp3 = std::nullopt) {
+            type = inpType;
+            op1 = inpOp1;
+            op2 = inpOp2;
+            if (inOp3) {
+                op3 = inOp3.value();
+            }
+            
+        };
+
+
+};
+
 
 enum class Datatype {
     INT
@@ -38,16 +138,15 @@ public:
         struct {
             int memRequired;
         } funcData;
-
     };
 
 };
 
 class SymbolTable {
-public:
-    SymbolTable* upperTable;
-    int currFrameOffset = 0;
-    std::vector<TableEntry*> entries;
+    public:
+        SymbolTable* upperTable;
+        int currFrameOffset = 0;
+        std::vector<TableEntry*> entries;
 };
 
 
@@ -420,6 +519,169 @@ Stmt::~Stmt() {
        
 }
 
+std::string displayMachineCode(std::vector<Instr*> program) {
+    std::string programString;
+    for (Instr* instruction : program) {
+        std::string instructStr = "\n";
+
+        instructStr += instrString[instruction->type];
+
+        switch (instruction->op1.type) {
+            case x86OperandTypes::REGISTER:
+                instructStr += " " + regString[instruction->op1.reg];
+                break;
+
+            case x86OperandTypes::IMMEDIATE:
+                // need to cast?
+                instructStr += " " + std::to_string(instruction->op1.imm);
+                break;
+
+            case x86OperandTypes::STACK_OFFSET:
+                instructStr += " sp+" + std::to_string(instruction->op1.offset);
+                break;
+
+        }
+
+        switch (instruction->op2.type) {
+            case x86OperandTypes::REGISTER:
+                instructStr += ", " + regString[instruction->op2.reg];
+                break;
+
+            case x86OperandTypes::IMMEDIATE:
+                // need to cast?
+                instructStr += ", " + std::to_string(instruction->op2.imm);
+                break;
+
+            case x86OperandTypes::STACK_OFFSET:
+                instructStr += ", sp+" + std::to_string(instruction->op2.offset);
+                break;
+        }
+
+        // if operand 3 exists
+        if (instruction->op3) {
+            switch (instruction->op3.value().type) {
+                case x86OperandTypes::REGISTER:
+                    instructStr += ", " + regString[instruction->op3.value().reg];
+                    break;
+
+                case x86OperandTypes::IMMEDIATE:
+                    // need to cast?
+                    instructStr += ", " + std::to_string(instruction->op3.value().imm);
+                    break;
+
+                case x86OperandTypes::STACK_OFFSET:
+                    instructStr += ", sp+" + std::to_string(instruction->op3.value().offset);
+                    break;
+                }
+        }
+
+        programString += instructStr;
+        
+    }
+
+    return programString;
+}
+
+// generates code to calculate the result of an expression tree and store it in R2.
+std::vector<Instr*> generateExprCode(ExprNode* exprTree, std::vector<Instr*> block, Register retReg) {
+    Instr* newInstr1;
+    Instr* newInstr2;
+
+    bool instr1present = true;
+    bool instr2present = true;
+
+    // loads correct data into RAX and RBX
+    switch (exprTree->aType) {
+        case Operand::EXPR_NODE: {
+            instr1present = false;
+            std::vector<Instr*> newInstrs = generateExprCode(exprTree->a->data.expr, block, Register::RAX);
+            block.insert(block.end(), newInstrs.begin(), newInstrs.end());
+            break;
+        }
+            
+        case Operand::VAR_NODE: {
+            x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
+            x86operand op2 = x86operand(x86OperandTypes::STACK_OFFSET, exprTree->a->data.var->tableEntry->varData.frameOffset);
+            newInstr1 = new Instr(InstrType::LDR, op1, op2);
+            break;
+        }
+            
+        // should be able to get rid of this extra move and set the numconst as an operand
+        case Operand::NUMCONST_NODE: {
+            x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
+            x86operand op2 = x86operand(x86OperandTypes::IMMEDIATE, exprTree->a->data.numconst->val);
+            newInstr1 = new Instr(InstrType::MOV, op1, op2);
+            break;
+        }
+            
+    }
+
+    switch (exprTree->bType) {
+        case Operand::EXPR_NODE: {
+            instr2present = false;
+            std::vector<Instr*> newInstrs = generateExprCode(exprTree->b->data.expr, block, Register::RBX);
+            block.insert(block.end(), newInstrs.begin(), newInstrs.end());
+            break;
+        }
+            
+        case Operand::VAR_NODE: {
+            x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
+            x86operand op2 = x86operand(x86OperandTypes::STACK_OFFSET, exprTree->b->data.var->tableEntry->varData.frameOffset);
+            newInstr2 = new Instr(InstrType::LDR, op1, op2);
+            break;
+        }
+            
+        case Operand::NUMCONST_NODE: {
+            x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
+            x86operand op2 = x86operand(x86OperandTypes::IMMEDIATE, exprTree->b->data.numconst->val);
+            newInstr2 = new Instr(InstrType::MOV, op1, op2);
+            break;
+        }
+            
+    }
+
+    if (instr1present == true) {
+        block.push_back(newInstr1);
+    }
+    if (instr2present == true) {
+        block.push_back(newInstr2);
+    }
+    
+
+
+    // actual operation
+
+
+    // implementing multiplication is a pain - 64 bit x 64 bit == 128 bit
+    TokenType opcode = exprTree->opcode;
+    InstrType type;
+
+    switch (opcode) {
+        case TokenType::_ADD:
+            type = InstrType::ADD;
+            break;
+        case TokenType::_SUB:
+            type = InstrType::SUB;
+            break;
+        case TokenType::_MUL:
+            type = InstrType::MUL;
+            break;
+        case TokenType::_DIV:
+            type = InstrType::DIV;
+            break;
+    }
+
+    x86operand op1 = x86operand(x86OperandTypes::REGISTER, retReg);
+    x86operand op2 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
+    x86operand op3 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
+
+    Instr* newInstr = new Instr(type, op1, op2, op3);
+    block.push_back(newInstr);
+    return block;
+}
+
+
+
 // tells you whether an expression in the expression grammar chain is actually in use (contains an operation).
 bool expressionInUse(CstNode* cstExprNode) {
     // unaryRelExp...
@@ -546,10 +808,10 @@ Stmt* createAssignNodeAST(CstNode* exp, SymbolTable* symbolTable) {
 
     newAssignNode->assignNode.variable = new VarNode(varName, tblEntry); // fix this
     CstNode* furtherExp = exp->childrenNodes[2];
-
     // further assign...
+    int a = 3;
     if (furtherExp->childrenNodes.size() == 3) {
-
+        int a = 3;
         newAssignNode->assignNode.furtherAssign = true;
         newAssignNode->assignNode.init.assignNode = createAssignNodeAST(furtherExp, symbolTable);
     }
@@ -562,9 +824,6 @@ Stmt* createAssignNodeAST(CstNode* exp, SymbolTable* symbolTable) {
     
     return newAssignNode;
 }
-
-
-
 
 bool varDeclaredInScope(SymbolTable* currentTable, std::string varName) {
     for (TableEntry* entry : currentTable->entries) {
@@ -769,6 +1028,7 @@ Stmt* createAST(CstNode* cstRootNode) {
     Stmt* astRootNode = createStmtSeqNodeAST(cstRootNode, globalTable);
 
     std::cout << "finish" << std::endl;
+
     return astRootNode;
 }
 
@@ -1116,7 +1376,13 @@ int main() {
     Stmt* astRootNode = createAST(cstRootNode);
     std::cout << "DONE]" << std::endl;
 
-    getchar();
+
+    ExprNode* rootExprNode = astRootNode->seqNode.stmts[0]->declNode.init->data.expr;
+
+    std::vector<Instr*> block;
+    std::vector<Instr*> machineCode = generateExprCode(rootExprNode, block, Register::RAX);
+
+    std::cout << displayMachineCode(machineCode) << std::endl;;
 
     //std::cout << countNodes(cstRootNode) << std::endl;
     return 0; 
