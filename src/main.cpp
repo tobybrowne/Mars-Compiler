@@ -360,6 +360,21 @@ class NumVarExpr {
         } data;
 
         ~NumVarExpr();
+
+        NumVarExpr(Operand inpType, std::variant<NumConstNode*, VarNode*, ExprNode*> inpData) {
+            type = inpType;
+            switch (type) {
+                case Operand::VAR_NODE:
+                    data.var = std::get<VarNode*>(inpData);
+                    break;
+                case Operand::NUMCONST_NODE:
+                    data.numconst = std::get<NumConstNode*>(inpData);
+                    break;
+                case Operand::EXPR_NODE:
+                    data.expr = std::get<ExprNode*>(inpData);
+                    break;
+            }
+        };
 };
 
 
@@ -734,22 +749,19 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable) {
     if (expressionType == CstNonTerminal::FACTOR) {
         Token factorToken = childrenNodes[0]->token;
         TokenType factorType = factorToken.type;
-        NumVarExpr* newNumVarExpr = new NumVarExpr;
+        NumVarExpr* newNumVarExpr;
 
         if (factorType == TokenType::_NUMCONST) {
-            newNumVarExpr->type = Operand::NUMCONST_NODE;
-            newNumVarExpr->data.numconst = new NumConstNode(factorToken.numConstVal);
+            newNumVarExpr = new NumVarExpr(Operand::NUMCONST_NODE, new NumConstNode(factorToken.numConstVal));
         }
         else if (factorType == TokenType::_ID) {
-            newNumVarExpr->type = Operand::VAR_NODE;
             TableEntry* tblEntry = getTblEntry(symbolTable, factorToken.varName);
 
             if (tblEntry == NULL) {
                 std::cout << "VARIABLE " << factorToken.varName << " NOT DECLARED!]" << std::endl;
                 getchar();
             }
-
-            newNumVarExpr->data.var = new VarNode(factorToken.varName, tblEntry); // fix this.
+            newNumVarExpr = new NumVarExpr(Operand::VAR_NODE, new VarNode(factorToken.varName, tblEntry));
         }
         return newNumVarExpr;
     }
@@ -759,27 +771,56 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable) {
         NumVarExpr* operand1;
         NumVarExpr* operand2;
         TokenType opcode;
+        ExprNode* rootExprNode;
 
         if (expressionType == CstNonTerminal::UNARY_REL_EXP) {
             operand1 = createExprTreeAST(childrenNodes[1], symbolTable);
             operand2 = operand1;
             opcode = findOpcode(childrenNodes[0]);
+
+            rootExprNode = new ExprNode(opcode, operand1->type, operand2->type);
+            rootExprNode->a = operand1;
+            rootExprNode->b = operand2;
         }
+
         else {
             operand1 = createExprTreeAST(childrenNodes[0], symbolTable);
-            operand2 = createExprTreeAST(childrenNodes[1]->childrenNodes[1], symbolTable);
+            CstNode* interNode = childrenNodes[1];
+            operand2 = createExprTreeAST(interNode->childrenNodes[1], symbolTable);
+
             opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
+
+            rootExprNode = new ExprNode(opcode, operand1->type, operand2->type);
+            rootExprNode->a = operand1;
+            rootExprNode->b = operand2;
+
+            // manages when multiple "same-level" operations are stacked "+" and "-" for example.
+
+            ExprNode* prevExprNode = rootExprNode;
+            while (interNode->childrenNodes[2]->childrenNodes.size() != 1) {
+                operand1 = operand2;
+                operand2 = createExprTreeAST(interNode->childrenNodes[2]->childrenNodes[1], symbolTable);
+
+                opcode = findOpcode(interNode->childrenNodes[2]->childrenNodes[0]);
+
+                ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
+                newExprNode->a = operand1;
+                newExprNode->b = operand2;
+
+                NumVarExpr* newNumVarExpr = new NumVarExpr(Operand::EXPR_NODE, newExprNode);
+
+                prevExprNode->bType = Operand::EXPR_NODE;
+                prevExprNode->b = newNumVarExpr;
+
+                prevExprNode = newExprNode;
+
+                interNode = interNode->childrenNodes[2];
+            }
+            
         }
 
-        ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
-        newExprNode->a = operand1;
-        newExprNode->b = operand2;
-
         // creates expression node and returns it.
-        NumVarExpr* newNumVarExpr = new NumVarExpr;
-        newNumVarExpr->type = Operand::EXPR_NODE;
-        newNumVarExpr->data.expr = newExprNode;
-
+        NumVarExpr* newNumVarExpr = new NumVarExpr(Operand::EXPR_NODE, rootExprNode);
         return newNumVarExpr;
     }
     
@@ -846,7 +887,6 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
         std::cout << "VARIABLE "<< varName << " DECLARED TWICE!]" << std::endl;
         getchar();
     }
-
 
     TokenType dataTypeToken = (varDeclNode->childrenNodes)[0]->childrenNodes[0]->token.type;
     Datatype dataType;
