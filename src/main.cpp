@@ -20,10 +20,21 @@ enum class InstrType {
     LDR,
     STR,
     ADD,
-    MUL,
+    IMUL,
     MOV,
     SUB,
-    DIV
+    DIV,
+    AND,
+    OR,
+    CMP,
+    JE,
+    JNE,
+    JNB,
+    JNBE,
+    JNA,
+    JNAE,
+    INT3,
+    RET
 };
 
 std::unordered_map<InstrType, std::string> instrString = {
@@ -31,9 +42,20 @@ std::unordered_map<InstrType, std::string> instrString = {
     {InstrType::STR, "STR"},
     {InstrType::MOV, "MOV"},
     {InstrType::ADD, "ADD"},
-    {InstrType::MUL, "MUL"},
+    {InstrType::IMUL, "IMUL"},
     {InstrType::DIV, "DIV"},
     {InstrType::SUB, "SUB"},
+    {InstrType::AND, "AND"},
+    {InstrType::OR, "OR"},
+    {InstrType::CMP, "CMP"},
+    {InstrType::JE, "JE"},
+    {InstrType::JNE, "JNE"},
+    {InstrType::JNB, "JNB"},
+    {InstrType::JNBE, "JNBE"},
+    {InstrType::JNA, "JNA"},
+    {InstrType::JNAE, "JNAE"},
+    {InstrType::INT3, "INT3"},
+    {InstrType::RET, "RET"},
 };
 
 enum class Register {
@@ -43,7 +65,7 @@ enum class Register {
 
 std::unordered_map<Register, std::string> regString = {
     {Register::RAX, "RAX"},
-    {Register::RBX, "RBX"}
+    {Register::RBX, "RBX"},
 };
 
 enum class x86OperandTypes {
@@ -78,7 +100,7 @@ public:
         }
     };
 
-    x86operand(x86operand& t)  
+    x86operand(const x86operand &t)  
     {
         type = t.type;
         if (type == x86OperandTypes::REGISTER) {
@@ -90,28 +112,34 @@ public:
         else {
             offset = t.offset;
         }
-    };
+    }
 };
 
 
 class Instr {
     public:
         InstrType type;
+        int numArgs;
         x86operand op1;
         x86operand op2;
-        std::optional<x86operand> op3; // can be null or operand
+        x86operand op3; // can be null or operand
 
-        Instr(InstrType inpType, x86operand inpOp1, x86operand inpOp2, std::optional<x86operand> inOp3 = std::nullopt) {
+        Instr(InstrType inpType, std::vector<x86operand> inpOps) {
             type = inpType;
-            op1 = inpOp1;
-            op2 = inpOp2;
-            if (inOp3) {
-                op3 = inOp3.value();
+            numArgs = inpOps.size();
+
+            for (int i = 0; i < inpOps.size(); i++) {
+                if (i == 0) {
+                    op1 = inpOps[0];
+                }
+                else if (i == 1) {
+                    op2 = inpOps[1];
+                }
+                else {
+                    op3 = inpOps[2];
+                }
             }
-            
         };
-
-
 };
 
 
@@ -396,12 +424,9 @@ class ExprNode {
 
 ExprNode::ExprNode(TokenType opcode, Operand aType, Operand bType) : opcode(opcode), aType(aType), bType(bType)
 {
-    
-
 }
 
 ExprNode::ExprNode() {
-
 }
 
 ExprNode::~ExprNode()
@@ -529,71 +554,41 @@ Stmt::~Stmt() {
             }
             break;
         }
-
-    }
-       
+    }  
 }
 
 std::string displayMachineCode(std::vector<Instr*> program) {
-    std::string programString;
+    std::string programString = "\nformat PE64 NX GUI 6.0\nentry start \nsection '.text' code readable executable \nstart : \n";
+
     for (Instr* instruction : program) {
         std::string instructStr = "\n";
 
         instructStr += instrString[instruction->type];
 
-        switch (instruction->op1.type) {
-            case x86OperandTypes::REGISTER:
-                instructStr += " " + regString[instruction->op1.reg];
-                break;
+        std::vector<x86operand> operands = { instruction->op1 , instruction->op2 , instruction->op3 };
+        std::vector<x86OperandTypes> operandTypes = { instruction->op1.type , instruction->op2.type , instruction->op3.type };
 
-            case x86OperandTypes::IMMEDIATE:
-                // need to cast?
-                instructStr += " " + std::to_string(instruction->op1.imm);
-                break;
-
-            case x86OperandTypes::STACK_OFFSET:
-                instructStr += " sp+" + std::to_string(instruction->op1.offset);
-                break;
-
-        }
-
-        switch (instruction->op2.type) {
-            case x86OperandTypes::REGISTER:
-                instructStr += ", " + regString[instruction->op2.reg];
-                break;
-
-            case x86OperandTypes::IMMEDIATE:
-                // need to cast?
-                instructStr += ", " + std::to_string(instruction->op2.imm);
-                break;
-
-            case x86OperandTypes::STACK_OFFSET:
-                instructStr += ", sp+" + std::to_string(instruction->op2.offset);
-                break;
-        }
-
-        // if operand 3 exists
-        if (instruction->op3) {
-            switch (instruction->op3.value().type) {
+        for (int i = 0; i < instruction->numArgs; i++) {
+            switch (operandTypes[i]) {
                 case x86OperandTypes::REGISTER:
-                    instructStr += ", " + regString[instruction->op3.value().reg];
+                    instructStr += " " + regString[operands[i].reg];
                     break;
 
                 case x86OperandTypes::IMMEDIATE:
-                    // need to cast?
-                    instructStr += ", " + std::to_string(instruction->op3.value().imm);
+                    instructStr += " " + std::to_string(operands[i].imm);
                     break;
 
                 case x86OperandTypes::STACK_OFFSET:
-                    instructStr += ", sp+" + std::to_string(instruction->op3.value().offset);
+                    instructStr += " sp+" + std::to_string(operands[i].offset);
                     break;
-                }
+            }
+            if (i != instruction->numArgs - 1) {
+                instructStr += ",";
+            }
         }
-
         programString += instructStr;
-        
     }
-
+    programString += "\nINT3\nRET";
     return programString;
 }
 
@@ -604,6 +599,14 @@ std::vector<Instr*> generateExprCode(ExprNode* exprTree, std::vector<Instr*> blo
 
     bool instr1present = true;
     bool instr2present = true;
+
+    x86operand op1;
+    x86operand op2;
+
+    TokenType opcode = exprTree->opcode;
+    
+
+    // manage the operands
 
     // loads correct data into RAX and RBX
     switch (exprTree->aType) {
@@ -617,7 +620,7 @@ std::vector<Instr*> generateExprCode(ExprNode* exprTree, std::vector<Instr*> blo
         case Operand::VAR_NODE: {
             x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
             x86operand op2 = x86operand(x86OperandTypes::STACK_OFFSET, exprTree->a->data.var->tableEntry->varData.frameOffset);
-            newInstr1 = new Instr(InstrType::LDR, op1, op2);
+            newInstr1 = new Instr(InstrType::LDR, { op1, op2 });
             break;
         }
             
@@ -625,53 +628,93 @@ std::vector<Instr*> generateExprCode(ExprNode* exprTree, std::vector<Instr*> blo
         case Operand::NUMCONST_NODE: {
             x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
             x86operand op2 = x86operand(x86OperandTypes::IMMEDIATE, exprTree->a->data.numconst->val);
-            newInstr1 = new Instr(InstrType::MOV, op1, op2);
+            newInstr1 = new Instr(InstrType::MOV, { op1, op2 });
             break;
-        }
-            
+        }     
+    }
+    if (instr1present == true) {
+        block.push_back(newInstr1);
     }
 
-    switch (exprTree->bType) {
+    // two operands
+    if (opcode != TokenType::_NOT) {
+        switch (exprTree->bType) {
         case Operand::EXPR_NODE: {
             instr2present = false;
             std::vector<Instr*> newInstrs = generateExprCode(exprTree->b->data.expr, block, Register::RBX);
             block.insert(block.end(), newInstrs.begin(), newInstrs.end());
             break;
         }
-            
+
         case Operand::VAR_NODE: {
             x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
             x86operand op2 = x86operand(x86OperandTypes::STACK_OFFSET, exprTree->b->data.var->tableEntry->varData.frameOffset);
-            newInstr2 = new Instr(InstrType::LDR, op1, op2);
+            newInstr2 = new Instr(InstrType::LDR, { op1, op2 });
             break;
         }
-            
+
         case Operand::NUMCONST_NODE: {
             x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
             x86operand op2 = x86operand(x86OperandTypes::IMMEDIATE, exprTree->b->data.numconst->val);
-            newInstr2 = new Instr(InstrType::MOV, op1, op2);
+            newInstr2 = new Instr(InstrType::MOV, { op1, op2 });
             break;
         }
-            
+        }
+        
+        if (instr2present == true) {
+            block.push_back(newInstr2);
+        }
     }
 
-    if (instr1present == true) {
-        block.push_back(newInstr1);
+
+    // performs operation
+
+    if (opcode == TokenType::_NOT) {
+        block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
+        block.push_back(new Instr(InstrType::JNE, { x86operand(x86OperandTypes::IMMEDIATE, 2) })); // jne #2
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
     }
-    if (instr2present == true) {
-        block.push_back(newInstr2);
+    else if (opcode == TokenType::_LT) {
+        block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
+        block.push_back(new Instr(InstrType::JNB, { x86operand(x86OperandTypes::IMMEDIATE, 2) })); // jne #2
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
     }
-    
+    else if (opcode == TokenType::_LE) {
+        block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
+        block.push_back(new Instr(InstrType::JNBE, { x86operand(x86OperandTypes::IMMEDIATE, 2) })); // jne #2
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
+    }
+    else if (opcode == TokenType::_GT) {
+        block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
+        block.push_back(new Instr(InstrType::JNA, { x86operand(x86OperandTypes::IMMEDIATE, 2) })); // jne #2
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
+    }
+    else if (opcode == TokenType::_GE) {
+        block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
+        block.push_back(new Instr(InstrType::JNAE, { x86operand(x86OperandTypes::IMMEDIATE, 2) })); // jne #2
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
+    }
+    else if (opcode == TokenType::_EQUAL) {
+        block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
+        block.push_back(new Instr(InstrType::JNE, { x86operand(x86OperandTypes::IMMEDIATE, 2) })); // jne #2
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
+    }
+    else if (opcode == TokenType::_NOTEQUAL) {
+        block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
+        block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::IMMEDIATE, 2) })); // jne #2
+        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
+    }
+    else {
+        InstrType type;
 
-
-    // actual operation
-
-
-    // implementing multiplication is a pain - 64 bit x 64 bit == 128 bit
-    TokenType opcode = exprTree->opcode;
-    InstrType type;
-
-    switch (opcode) {
+        switch (opcode) {
         case TokenType::_ADD:
             type = InstrType::ADD;
             break;
@@ -679,19 +722,33 @@ std::vector<Instr*> generateExprCode(ExprNode* exprTree, std::vector<Instr*> blo
             type = InstrType::SUB;
             break;
         case TokenType::_MUL:
-            type = InstrType::MUL;
+            type = InstrType::IMUL;
             break;
         case TokenType::_DIV:
             type = InstrType::DIV;
             break;
+        case TokenType::_AND:
+            type = InstrType::AND;
+            break;
+        case TokenType::_OR:
+            type = InstrType::OR;
+            break;
+
+        }
+
+        if (retReg == Register::RAX) {
+            op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
+            op2 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
+        }
+        else {
+            op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
+            op2 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
+        }
+
+        Instr* newInstr = new Instr(type, { op1, op2 });
+        block.push_back(newInstr);
+        
     }
-
-    x86operand op1 = x86operand(x86OperandTypes::REGISTER, retReg);
-    x86operand op2 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
-    x86operand op3 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
-
-    Instr* newInstr = new Instr(type, op1, op2, op3);
-    block.push_back(newInstr);
     return block;
 }
 
@@ -742,7 +799,7 @@ TokenType findOpcode(CstNode* cstExprNode) {
 }
 
 // converts CST expression tree into an AST expression tree.
-NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable) {
+NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable, bool negate = false) {
     CstNonTerminal expressionType = cstExpr->val.nonTerm;
     std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
 
@@ -784,24 +841,32 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable) {
         }
 
         else {
-            operand1 = createExprTreeAST(childrenNodes[0], symbolTable);
-            CstNode* interNode = childrenNodes[1];
-            operand2 = createExprTreeAST(interNode->childrenNodes[1], symbolTable);
-
+            
             opcode = findOpcode(childrenNodes[1]->childrenNodes[0]);
+            CstNode* interNode = childrenNodes[1];
 
+            operand2 = createExprTreeAST(interNode->childrenNodes[1], symbolTable);    
+            operand1 = createExprTreeAST(childrenNodes[0], symbolTable);
+            
             rootExprNode = new ExprNode(opcode, operand1->type, operand2->type);
             rootExprNode->a = operand1;
             rootExprNode->b = operand2;
+
+            
 
             // manages when multiple "same-level" operations are stacked "+" and "-" for example.
 
             ExprNode* prevExprNode = rootExprNode;
             while (interNode->childrenNodes[2]->childrenNodes.size() != 1) {
-                operand1 = operand2;
-                operand2 = createExprTreeAST(interNode->childrenNodes[2]->childrenNodes[1], symbolTable);
-
+                std::cout << "yo" << std::endl;
                 opcode = findOpcode(interNode->childrenNodes[2]->childrenNodes[0]);
+                
+
+                operand1 = operand2;
+                operand2 = createExprTreeAST(interNode->childrenNodes[2]->childrenNodes[1], symbolTable); 
+                
+                std::cout << "yo" << std::endl;
+               
 
                 ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
                 newExprNode->a = operand1;
@@ -816,6 +881,7 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable) {
 
                 interNode = interNode->childrenNodes[2];
             }
+            
             
         }
 
@@ -874,7 +940,6 @@ bool varDeclaredInScope(SymbolTable* currentTable, std::string varName) {
     }
     return false;
 }
-
 
 // creates a variable declaration node.
 Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
@@ -1106,7 +1171,7 @@ void defineLanguageGrammar() {
     patternList[CstNonTerminal::UNARY_REL_EXP] = { {CstNonTerminal::REL_EXP}, {TokenType::_NOT, CstNonTerminal::UNARY_REL_EXP} };
 
     patternList[CstNonTerminal::REL_EXP] = { {CstNonTerminal::SUM_EXP, CstNonTerminal::REL_EXP__}};
-    patternList[CstNonTerminal::REL_EXP__] = { {CstNonTerminal::REL_OP, CstNonTerminal::SUM_EXP}, {TokenType::_E}};
+    patternList[CstNonTerminal::REL_EXP__] = { {CstNonTerminal::REL_OP, CstNonTerminal::SUM_EXP, CstNonTerminal::REL_EXP__}, {TokenType::_E}};
     patternList[CstNonTerminal::REL_OP] = { {TokenType::_LE}, {TokenType::_LT}, {TokenType::_GT}, {TokenType::_GE}, {TokenType::_EQUAL}, {TokenType::_NOTEQUAL} };
 
     patternList[CstNonTerminal::SUM_EXP] = { {CstNonTerminal::MUL_EXP, CstNonTerminal::SUM_EXP__} };
@@ -1375,7 +1440,7 @@ int main() {
     defineLanguageGrammar();
 
     bool debugMode = false;
-
+    
     std::cout << "MARS Compiler Alpha       [By Toby Browne] \n" << std::endl;
 
     std::cout << "Reading Source Code... [";
