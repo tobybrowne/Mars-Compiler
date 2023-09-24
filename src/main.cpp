@@ -68,7 +68,8 @@ int main() {
     std::cout << "DONE]" << std::endl;
 
     std::cout << "Generating x86... [";
-    std::vector<Instr*> block = generateCodeBlock(astRootNode);
+    programState state;
+    std::vector<Instr*> block = generateCodeBlock(astRootNode, state);
     std::cout << "DONE]" << std::endl;
 
 

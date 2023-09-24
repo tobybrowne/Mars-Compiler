@@ -23,6 +23,12 @@ enum class InstrType {
     LABEL
 };
 
+class programState {
+    public:
+        int whileCount = 0;
+        int ifCount = 0;
+};
+
 std::unordered_map<InstrType, std::string> instrString = {
     {InstrType::LDR, "LDR"},
     {InstrType::STR, "STR"},
