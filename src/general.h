@@ -1,4 +1,5 @@
-#pragma once
+#pragma once   
+
 enum class InstrType {
     LDR,
     STR,
@@ -17,7 +18,9 @@ enum class InstrType {
     JNA,
     JNAE,
     INT3,
-    RET
+    RET,
+    JMP,
+    LABEL
 };
 
 std::unordered_map<InstrType, std::string> instrString = {
@@ -39,6 +42,7 @@ std::unordered_map<InstrType, std::string> instrString = {
     {InstrType::JNAE, "JNAE"},
     {InstrType::INT3, "INT3"},
     {InstrType::RET, "RET"},
+    {InstrType::JMP, "JMP"},
 };
 
 enum class Register {
@@ -55,74 +59,57 @@ enum class x86OperandTypes {
     REGISTER,
     IMMEDIATE,
     STACK_OFFSET,
+    LABEL,
     EMPTY
 };
 
 class x86operand {
 public:
     x86OperandTypes type;
-    union {
-        Register reg;
-        int imm;
-        int offset;
-    };
+    std::variant<Register, int, std::string> data;
+    
+    // sometimes needs a default constructor?
+    x86operand() {
+        type = x86OperandTypes::EMPTY;
+        data = 0;
+    }
 
-    // default prevents linker errors.
-    x86operand() = default;
-
-    x86operand(x86OperandTypes inpType, std::variant<Register, int> inpData) {
+    x86operand(x86OperandTypes inpType, std::variant<Register, int, std::string> inpData) {
         type = inpType;
-        if (inpType == x86OperandTypes::REGISTER) {
-            reg = std::get<Register>(inpData);
-        }
-        else if (inpType == x86OperandTypes::IMMEDIATE) {
-            imm = std::get<int>(inpData);
-        }
-        else {
-            offset = std::get<int>(inpData);
-        }
-    };
-
-    x86operand(const x86operand& t)
-    {
-        type = t.type;
-        if (type == x86OperandTypes::REGISTER) {
-            reg = t.reg;
-        }
-        else if (type == x86OperandTypes::IMMEDIATE) {
-            imm = t.imm;
-        }
-        else {
-            offset = t.offset;
-        }
+        data = inpData;
     }
 };
 
 
 class Instr {
-public:
-    InstrType type;
-    int numArgs;
-    x86operand op1;
-    x86operand op2;
-    x86operand op3; // can be null or operand
+    public:
+        InstrType type;
+        int numArgs;
+        x86operand op1;
+        x86operand op2;
+        x86operand op3; // can be null or operand
+        std::optional<std::string> label;
 
-    Instr(InstrType inpType, std::vector<x86operand> inpOps) {
-        type = inpType;
-        numArgs = inpOps.size();
+        Instr(InstrType inpType, std::vector<x86operand> inpOps, std::optional<std::string> labelInp = std::nullopt) {
+            type = inpType;
+            numArgs = inpOps.size();
 
-        for (int i = 0; i < inpOps.size(); i++) {
-            if (i == 0) {
-                op1 = inpOps[0];
+            if (labelInp) {
+                label = labelInp.value();
             }
-            else if (i == 1) {
-                op2 = inpOps[1];
+
+            for (int i = 0; i < inpOps.size(); i++) {
+                if (i == 0) {
+                    op1 = inpOps[0];
+                }
+                else if (i == 1) {
+                    op2 = inpOps[1];
+                }
+                else {
+                    op3 = inpOps[2];
+                }
             }
-            else {
-                op3 = inpOps[2];
-            }
-        }
-    };
+        };
 };
 
 
@@ -491,6 +478,10 @@ Stmt::Stmt(Statement stmtType) : type(stmtType) {
     switch (stmtType) {
     case Statement::STMTSEQ_NODE: {
         new (&seqNode.stmts) std::vector<Stmt*>();
+        break;
+    }
+    case Statement::IF_NODE: {
+        ifNode.elsePresent = false;
         break;
     }
     }

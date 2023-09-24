@@ -285,6 +285,7 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt, SymbolTable* symbolTable) {
 
     // if else statement is present...
     if (childrenNodes.size() == 7) {
+        
         newIfNode->ifNode.elsePresent = true;
         newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[6], symbolTable);
     }

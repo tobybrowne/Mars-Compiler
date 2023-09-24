@@ -42,8 +42,6 @@ int main() {
     } // file doesn't need to be closed because it is defined in it's own scope and has a pre-made destructor
     std::cout << "DONE]" << std::endl;
 
-    std::cout << contents << std::endl;
-
 
     std::cout << "Tokenizing Source Code... [";
     std::vector<Token> tokenStream = tokenize(contents, true);
@@ -69,13 +67,13 @@ int main() {
     Stmt* astRootNode = createAST(cstRootNode);
     std::cout << "DONE]" << std::endl;
 
+    std::cout << "Generating x86... [";
+    std::vector<Instr*> block = generateCodeBlock(astRootNode);
+    std::cout << "DONE]" << std::endl;
 
-    ExprNode* rootExprNode = astRootNode->seqNode.stmts[0]->declNode.init->data.expr;
 
-    std::vector<Instr*> block;
-    std::vector<Instr*> machineCode = generateExprCode(rootExprNode, block, Register::RAX);
 
-    std::cout << displayMachineCode(machineCode) << std::endl;;
+    std::cout << displayMachineCode(block) << std::endl;;
 
     //std::cout << countNodes(cstRootNode) << std::endl;
     getchar();
