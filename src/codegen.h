@@ -2,6 +2,7 @@
 #include "general.h"
 
 int ifCount = 0;
+int whileCount = 0;
 
 
 std::string displayMachineCode(std::vector<Instr*> program) {
@@ -219,6 +220,26 @@ std::vector<Instr*> generateExprCode(ExprNode* exprTree, std::vector<Instr*> blo
 // forward definition.
 std::vector<Instr*> generateCodeBlock(Stmt* seqNode);
 
+std::vector<Instr*> generateWhileCode(Stmt* whileNode) {
+    std::cout << "hiya" << std::endl;
+    std::vector<Instr*> block;
+    NumVarExpr* condition = whileNode->whileNode.condition;
+    std::string whileCountStr = std::to_string(whileCount);
+    block.push_back(new Instr(InstrType::LABEL, {}, "STARTLOOP" + whileCountStr)); // cmp rax #0 
+    std::vector<Instr*> evalExpr = generateExprCode(condition->data.expr, {}, Register::RAX);
+    block.insert(block.end(), evalExpr.begin(), evalExpr.end()); 
+
+    block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0 
+    block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::LABEL, "END"+whileCountStr)})); // cmp rax #0 
+    
+    std::vector<Instr*> whileBlock = generateCodeBlock(whileNode->whileNode.body);
+    block.insert(block.end(), whileBlock.begin(), whileBlock.end()); // block += whileBlock
+    block.push_back(new Instr(InstrType::JMP, { x86operand(x86OperandTypes::LABEL, "STARTLOOP" + whileCountStr) })); // cmp rax #0 
+    block.push_back(new Instr(InstrType::LABEL, {}, "END"+whileCountStr)); // cmp rax #0 
+    
+    return block;
+}
+
 std::vector<Instr*> generateIfCode(Stmt* ifNode) {
     std::vector<Instr*> block;
     NumVarExpr* condition = ifNode->ifNode.condition;
@@ -248,6 +269,7 @@ std::vector<Instr*> generateIfCode(Stmt* ifNode) {
 }
 
 
+
 std::vector<Instr*> generateCodeBlock(Stmt* seqNode) {
     std::vector<Instr*> block;
     for (Stmt* statement : seqNode->seqNode.stmts) {
@@ -257,6 +279,7 @@ std::vector<Instr*> generateCodeBlock(Stmt* seqNode) {
                 newInstrs = generateIfCode(statement);
                 break;
             case Statement::WHILE_NODE:
+                newInstrs = generateWhileCode(statement);
                 break;
             case Statement::DECL_NODE:
                 break;
