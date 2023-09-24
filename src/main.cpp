@@ -69,12 +69,37 @@ int main() {
 
     std::cout << "Generating x86... [";
     programState state;
-    std::vector<Instr*> block = generateCodeBlock(astRootNode, state);
+    std::vector<Instr*> block;
+
+    // just for now.
+    int mainLocalSpace = 100;
+
+    block.push_back(new Instr(InstrType::CALL, { x86operand(x86OperandTypes::LABEL, "main") }));
+    block.push_back(new Instr(InstrType::INT3, {}));
+    block.push_back(new Instr(InstrType::RET, {}));
+
+    block.push_back(new Instr(InstrType::LABEL, {}, "main"));
+    block.push_back(new Instr(InstrType::SUB, {x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, mainLocalSpace) }));
+
+    std::vector<Instr*> funcContent = generateCodeBlock(astRootNode, state);
+    block.insert(block.end(), funcContent.begin(), funcContent.end());
+
+    block.push_back(new Instr(InstrType::ADD, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, mainLocalSpace) }));
+    block.push_back(new Instr(InstrType::RET, {}));
+    
+
+
+
+ 
     std::cout << "DONE]" << std::endl;
 
 
 
-    std::cout << displayMachineCode(block) << std::endl;;
+    std::string outputStr = displayMachineCode(block);
+
+    std::ofstream MyFile("output.txt");
+    MyFile << outputStr;
+    MyFile.close();
 
     //std::cout << countNodes(cstRootNode) << std::endl;
     getchar();

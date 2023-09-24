@@ -20,7 +20,8 @@ enum class InstrType {
     INT3,
     RET,
     JMP,
-    LABEL
+    LABEL,
+    CALL
 };
 
 class programState {
@@ -49,16 +50,19 @@ std::unordered_map<InstrType, std::string> instrString = {
     {InstrType::INT3, "INT3"},
     {InstrType::RET, "RET"},
     {InstrType::JMP, "JMP"},
+    {InstrType::CALL, "CALL"},
 };
 
 enum class Register {
     RAX,
     RBX,
+    RSP
 };
 
 std::unordered_map<Register, std::string> regString = {
     {Register::RAX, "RAX"},
     {Register::RBX, "RBX"},
+    {Register::RSP, "RSP"},
 };
 
 enum class x86OperandTypes {

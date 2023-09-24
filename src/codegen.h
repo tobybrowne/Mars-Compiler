@@ -1,8 +1,11 @@
 
 #include "general.h"
 
+
 int ifCount = 0;
 int whileCount = 0;
+
+
 
 
 std::string displayMachineCode(std::vector<Instr*> program) {
@@ -46,7 +49,6 @@ std::string displayMachineCode(std::vector<Instr*> program) {
         }
         programString += instructStr;
     }
-    programString += "\n\tINT3\n\tRET";
     return programString;
 }
 
@@ -218,10 +220,11 @@ std::vector<Instr*> generateExprCode(ExprNode* exprTree, std::vector<Instr*> blo
 }
 
 // forward definition.
-std::vector<Instr*> generateCodeBlock(Stmt* seqNode);
+std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state);
 
 std::vector<Instr*> generateWhileCode(Stmt* whileNode, programState state) {
     state.whileCount++;
+
 
     std::vector<Instr*> block;
     NumVarExpr* condition = whileNode->whileNode.condition;
@@ -233,7 +236,7 @@ std::vector<Instr*> generateWhileCode(Stmt* whileNode, programState state) {
     block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0 
     block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::LABEL, "ENDLOOP"+whileCountStr)})); // cmp rax #0 
     
-    std::vector<Instr*> whileBlock = generateCodeBlock(whileNode->whileNode.body);
+    std::vector<Instr*> whileBlock = generateCodeBlock(whileNode->whileNode.body, state);
     block.insert(block.end(), whileBlock.begin(), whileBlock.end()); // block += whileBlock
     block.push_back(new Instr(InstrType::JMP, { x86operand(x86OperandTypes::LABEL, "STARTLOOP" + whileCountStr) })); // cmp rax #0 
     block.push_back(new Instr(InstrType::LABEL, {}, "ENDLOOP"+whileCountStr)); // cmp rax #0 
@@ -249,10 +252,10 @@ std::vector<Instr*> generateIfCode(Stmt* ifNode, programState state) {
     block = generateExprCode(condition->data.expr, block, Register::RAX);
     block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0 
     
-    std::vector<Instr*> ifBlock = generateCodeBlock(ifNode->ifNode.ifBody); // = // deal with ifNode.ifBody
+    std::vector<Instr*> ifBlock = generateCodeBlock(ifNode->ifNode.ifBody, state); // = // deal with ifNode.ifBody
 
     if (ifNode->ifNode.elsePresent) {
-        std::vector<Instr*> elseBlock = generateCodeBlock(ifNode->ifNode.elseBody); // deal with this ifNode.elseBody
+        std::vector<Instr*> elseBlock = generateCodeBlock(ifNode->ifNode.elseBody, state); // deal with this ifNode.elseBody
         elseBlock[0]->label = "ELSE" + ifCountStr; // label else block
         block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::LABEL, "ELSE"+ ifCountStr)})); // cmp rax #0 
         ifBlock.push_back(new Instr(InstrType::JMP, { x86operand(x86OperandTypes::LABEL, "END" + ifCountStr) })); // cmp rax #0 )
@@ -289,11 +292,15 @@ std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state) {
             case Statement::WHILE_NODE:
                 newInstrs = generateWhileCode(statement, state);
                 break;
+
+
             case Statement::DECL_NODE:
+
                 break;
             case Statement::ASSIGN_NODE:
                 break;
             case Statement::STMTSEQ_NODE:
+                newInstrs = generateCodeBlock(statement, state);
                 break;
             case Statement::BREAK_NODE:
                 newInstrs = generateBreakCode(state);
