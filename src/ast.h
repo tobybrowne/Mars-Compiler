@@ -188,18 +188,16 @@ bool varDeclaredInScope(SymbolTable* currentTable, std::string varName) {
     return false;
 }
 
-// creates a variable declaration node.
-Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
-    Stmt* newDeclNode = new Stmt(Statement::DECL_NODE);
 
-    bool assignment = true;
-    if (varDeclNode->childrenNodes[1]->childrenNodes.size() == 1) {
-        assignment = false;
+// generates a vector of declerations from the recursive CST decl structure.
+std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector, SymbolTable* symbolTable) {
+    std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
+
+    if (childrenNodes.size() == 1) { // at dead end...
+        return decASTNodeVector;
     }
 
-    newDeclNode->declNode.assignment = assignment;
-
-    // create varNode...
+    CstNode* varDeclNode = childrenNodes[0];
     std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
 
     if (varDeclaredInScope(symbolTable, varName)) {
@@ -209,19 +207,11 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
 
     TokenType dataTypeToken = (varDeclNode->childrenNodes)[0]->childrenNodes[0]->token.type;
     Datatype dataType;
-
-
     switch (dataTypeToken) {
         case TokenType::_INT:
             dataType = Datatype::INT;
     }
 
-    if (assignment == true){
-        // this must be calculated before the table entry is made.
-        NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
-        newDeclNode->declNode.init = init;
-    }
-    
     // add to symbol table...
     TableEntry* newSymTblEntry = new TableEntry;
     newSymTblEntry->name = varName;
@@ -233,24 +223,20 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
     // increment frame offset
     symbolTable->currFrameOffset++;
 
-    newDeclNode->declNode.variable = new VarNode(varName, newSymTblEntry);
+    // if declaration has an assignment add an assign node to AST.
+    if (varDeclNode->childrenNodes[1]->childrenNodes.size() != 1) {
+        Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
 
-    return newDeclNode;
-}
+        newAssignNode->assignNode.variable = new VarNode(varName, newSymTblEntry);
+        newAssignNode->assignNode.furtherAssign = false; // not possible with declarations atm.
 
-// generates a vector of declerations from the recursive CST decl structure.
-std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector, SymbolTable* symbolTable) {
-    std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
-
-    if (childrenNodes.size() == 1) { // at dead end...
-        return decASTNodeVector;
+        NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
+        newAssignNode->assignNode.init.exprTree = init;
+        decASTNodeVector.push_back(newAssignNode);
     }
-
-    decASTNodeVector.push_back(createVarDeclNodeAST(childrenNodes[0], symbolTable)); // manages varDecl...
 
     decASTNodeVector = createDeclListAST(childrenNodes[1], decASTNodeVector, symbolTable); // manages further decList
     return decASTNodeVector;
-
 }
 
 // forward declaration required.

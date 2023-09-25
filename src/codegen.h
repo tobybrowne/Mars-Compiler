@@ -281,6 +281,7 @@ std::vector<Instr*> generateBreakCode(programState state) {
 }
 
 
+
 std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state) {
     std::vector<Instr*> block;
     for (Stmt* statement : seqNode->seqNode.stmts) {
@@ -291,11 +292,6 @@ std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state) {
                 break;
             case Statement::WHILE_NODE:
                 newInstrs = generateWhileCode(statement, state);
-                break;
-
-
-            case Statement::DECL_NODE:
-
                 break;
             case Statement::ASSIGN_NODE:
                 break;

@@ -457,12 +457,6 @@ public:
 
         struct {
             VarNode* variable;
-            NumVarExpr* init;
-            bool assignment;
-        } declNode;
-
-        struct {
-            VarNode* variable;
             bool furtherAssign;
             union {
                 NumVarExpr* exprTree;
@@ -513,12 +507,6 @@ Stmt::~Stmt() {
         std::cout << "while node destr." << std::endl;
         delete whileNode.condition;
         delete whileNode.body;
-        break;
-    }
-    case(Statement::DECL_NODE): {
-        std::cout << "decl node destr." << std::endl;
-        delete declNode.variable;
-        delete declNode.init;
         break;
     }
     case(Statement::STMTSEQ_NODE): {
