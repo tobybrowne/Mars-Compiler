@@ -24,11 +24,63 @@ enum class InstrType {
     CALL
 };
 
+// starting underscores indicate tokens, nothing else should have them.
+enum class TokenType {
+    _IF,
+    _ELSE,
+    _WHILE,
+    _RETURN,
+    _BREAK,
+    _INT,
+    _ID,
+    _NUMCONST,
+    _LE,
+    _LT,
+    _GT,
+    _GE,
+    _EQUAL,
+    _NOTEQUAL,
+    _ADD,
+    _SUB,
+    _MUL,
+    _DIV,
+    _SEMI,
+    _OPENCURLY,
+    _CLOSECURLY,
+    _OPENBRACK,
+    _CLOSEBRACK,
+    _ASSIGN,
+    _AND,
+    _OR,
+    _NOT,
+    _E
+};
+
 class programState {
     public:
         int whileCount = 0;
         int ifCount = 0;
 };
+
+// matches each relative operator to it's instruction type.
+std::unordered_map<TokenType, InstrType> tokenInstrMatch = {
+    {TokenType::_NOT, InstrType::JNE},
+    {TokenType::_LT, InstrType::JNB},
+    {TokenType::_LE, InstrType::JNBE},
+    {TokenType::_GT, InstrType::JNA},
+    {TokenType::_GE, InstrType::JNAE},
+    {TokenType::_EQUAL, InstrType::JNE},
+    {TokenType::_NOTEQUAL, InstrType::JE},
+    {TokenType::_ADD, InstrType::ADD},
+    {TokenType::_SUB, InstrType::SUB},
+    {TokenType::_MUL, InstrType::IMUL},
+    {TokenType::_DIV, InstrType::DIV},
+    {TokenType::_AND, InstrType::AND},
+    {TokenType::_OR, InstrType::OR},
+};
+
+
+std::vector<TokenType> relativeOps = {TokenType::_NOT , TokenType::_LT, TokenType::_LE, TokenType::_GT, TokenType::_GE, TokenType::_EQUAL, TokenType::_NOTEQUAL };
 
 std::unordered_map<InstrType, std::string> instrString = {
     {InstrType::LDR, "LDR"},
@@ -192,37 +244,7 @@ enum class CstNonTerminal {
     FACTOR
 };
 
-// starting underscores indicate tokens, nothing else should have them.
-enum class TokenType {
-    _IF,
-    _ELSE,
-    _WHILE,
-    _RETURN,
-    _BREAK,
-    _INT,
-    _ID,
-    _NUMCONST,
-    _LE,
-    _LT,
-    _GT,
-    _GE,
-    _EQUAL,
-    _NOTEQUAL,
-    _ADD,
-    _SUB,
-    _MUL,
-    _DIV,
-    _SEMI,
-    _OPENCURLY,
-    _CLOSECURLY,
-    _OPENBRACK,
-    _CLOSEBRACK,
-    _ASSIGN,
-    _AND,
-    _OR,
-    _NOT,
-    _E
-};
+
 
 struct Token {
     TokenType type;

@@ -1,13 +1,6 @@
 
 #include "general.h"
 
-
-int ifCount = 0;
-int whileCount = 0;
-
-
-
-
 std::string displayMachineCode(std::vector<Instr*> program) {
     std::string programString = "\nformat PE64 NX GUI 6.0\nentry start \nsection '.text' code readable executable \nstart : \n";
 
@@ -18,7 +11,6 @@ std::string displayMachineCode(std::vector<Instr*> program) {
             instructStr = instructStr + instruction->label.value() + ": ";
         }
         instructStr+="\t";
-
 
         instructStr += instrString[instruction->type];
 
@@ -62,7 +54,6 @@ std::string displayMachineCode(std::vector<Instr*> program) {
 // generates code to calculate the result of an expression tree and store it in R2.
 // write this so it doesn't need an input block?
 std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*> block, Register retReg) {
-    
     switch (numVarExpr->type) {
         case Operand::VAR_NODE:
             block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::STACK_OFFSET, numVarExpr->data.var->tableEntry->varData.frameOffset) }));
@@ -72,164 +63,64 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
             break;
         case Operand::EXPR_NODE:
             ExprNode* exprTree = numVarExpr->data.expr;
-
-            Instr* newInstr1;
-            Instr* newInstr2;
-
-            bool instr1present = true;
-            bool instr2present = true;
-
             TokenType opcode = exprTree->opcode;
 
-            // manage the operands
+            std::vector<Operand> operandTypes;
+            std::vector<NumVarExpr*> operands;
+            std::vector<Register> registers = {Register::RAX, Register::RBX};
 
-            // loads correct data into RAX and RBX
-            switch (exprTree->aType) {
-            case Operand::EXPR_NODE: {
-                instr1present = false;
-                std::vector<Instr*> newInstrs = generateExprCode(exprTree->a, block, Register::RAX);
-                block.insert(block.end(), newInstrs.begin(), newInstrs.end());
-                break;
-            }
-
-            case Operand::VAR_NODE: {
-                x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
-                x86operand op2 = x86operand(x86OperandTypes::STACK_OFFSET, exprTree->a->data.var->tableEntry->varData.frameOffset);
-                newInstr1 = new Instr(InstrType::MOV, { op1, op2 });
-                break;
-            }
-
-                                  // should be able to get rid of this extra move and set the numconst as an operand
-            case Operand::NUMCONST_NODE: {
-                x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
-                x86operand op2 = x86operand(x86OperandTypes::IMMEDIATE, exprTree->a->data.numconst->val);
-                newInstr1 = new Instr(InstrType::MOV, { op1, op2 });
-                break;
-            }
-            }
-            if (instr1present == true) {
-                block.push_back(newInstr1);
-            }
-
-            // two operands
+            operandTypes.push_back(exprTree->aType);
+            operands.push_back(exprTree->a);
             if (opcode != TokenType::_NOT) {
-                switch (exprTree->bType) {
-                case Operand::EXPR_NODE: {
-                    instr2present = false;
-                    std::vector<Instr*> newInstrs = generateExprCode(exprTree->b, block, Register::RBX);
-                    block.insert(block.end(), newInstrs.begin(), newInstrs.end());
-                    break;
-                }
+                operandTypes.push_back(exprTree->bType);
+                operands.push_back(exprTree->b);
+            }
 
-                case Operand::VAR_NODE: {
-                    x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
-                    x86operand op2 = x86operand(x86OperandTypes::STACK_OFFSET, exprTree->b->data.var->tableEntry->varData.frameOffset);
-                    newInstr2 = new Instr(InstrType::LDR, { op1, op2 });
-                    break;
-                }
-
-                case Operand::NUMCONST_NODE: {
-                    x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
-                    x86operand op2 = x86operand(x86OperandTypes::IMMEDIATE, exprTree->b->data.numconst->val);
-                    newInstr2 = new Instr(InstrType::MOV, { op1, op2 });
-                    break;
-                }
-                }
-
-                if (instr2present == true) {
-                    block.push_back(newInstr2);
+            for (int i = 0; i < operands.size(); i++) {
+                switch (operandTypes[i]) {
+                    case Operand::EXPR_NODE: {
+                        std::vector<Instr*> newInstrs = generateExprCode(operands[i], block, registers[i]);
+                        block.insert(block.end(), newInstrs.begin(), newInstrs.end());
+                        break;
+                    }
+                    case Operand::VAR_NODE: {
+                        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::STACK_OFFSET, operands[i]->data.var->tableEntry->varData.frameOffset) }));
+                        break;
+                    }                       // should be able to get rid of this extra move and set the numconst as an operand
+                    case Operand::NUMCONST_NODE: {
+                        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::IMMEDIATE, operands[i]->data.numconst->val) }));
+                        break;
+                    }
                 }
             }
 
+            // if opcode is a relative operator...
+            if (std::find(relativeOps.begin(), relativeOps.end(), opcode) != relativeOps.end()) {
+                if (opcode == TokenType::_NOT) {
+                    block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0
+                }
+                else {
+                    block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
+                }
 
-            // performs operation
-
-            if (opcode == TokenType::_NOT) {
-                block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0
                 block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
-                block.push_back(new Instr(InstrType::JNE, { x86operand(x86OperandTypes::LABEL, "ENDOPf") })); // jne #2
+                block.push_back(new Instr(tokenInstrMatch[opcode], {x86operand(x86OperandTypes::LABEL, "ENDOPf")})); // jne #2
                 block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
                 block.push_back(new Instr(InstrType::LABEL, {}, "ENDOPf")); // mov retReg #1
             }
-            else if (opcode == TokenType::_LT) {
-                block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
-                block.push_back(new Instr(InstrType::JNB, { x86operand(x86OperandTypes::LABEL, "ENDOPf") })); // jne #2
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
-                block.push_back(new Instr(InstrType::LABEL, {}, "ENDOPf"));
-            }
-            else if (opcode == TokenType::_LE) {
-                block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
-                block.push_back(new Instr(InstrType::JNBE, { x86operand(x86OperandTypes::LABEL, "ENDOPf") })); // jne #2
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
-                block.push_back(new Instr(InstrType::LABEL, {}, "ENDOPf"));
-            }
-            else if (opcode == TokenType::_GT) {
-                block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
-                block.push_back(new Instr(InstrType::JNA, { x86operand(x86OperandTypes::LABEL, "ENDOPf") })); // jne #2
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
-                block.push_back(new Instr(InstrType::LABEL, {}, "ENDOPf"));
-            }
-            else if (opcode == TokenType::_GE) {
-                block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
-                block.push_back(new Instr(InstrType::JNAE, { x86operand(x86OperandTypes::LABEL, "ENDOPf") })); // jne #2
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
-                block.push_back(new Instr(InstrType::LABEL, {}, "ENDOPf"));
-            }
-            else if (opcode == TokenType::_EQUAL) {
-                block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
-                block.push_back(new Instr(InstrType::JNE, { x86operand(x86OperandTypes::LABEL, "ENDOPf") })); // jne #2
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
-                block.push_back(new Instr(InstrType::LABEL, {}, "ENDOPf"));
-            }
-            else if (opcode == TokenType::_NOTEQUAL) {
-                block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::REGISTER, Register::RBX) })); // cmp rax #0
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // mov retReg #0
-                block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::LABEL, "ENDOPf") })); // jne #2
-                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, 1) })); // mov retReg #1
-                block.push_back(new Instr(InstrType::LABEL, {}, "ENDOPf"));
-            }
+
             else {
-                InstrType type;
-
-                switch (opcode) {
-                case TokenType::_ADD:
-                    type = InstrType::ADD;
-                    break;
-                case TokenType::_SUB:
-                    type = InstrType::SUB;
-                    break;
-                case TokenType::_MUL:
-                    type = InstrType::IMUL;
-                    break;
-                case TokenType::_DIV:
-                    type = InstrType::DIV;
-                    break;
-                case TokenType::_AND:
-                    type = InstrType::AND;
-                    break;
-                case TokenType::_OR:
-                    type = InstrType::OR;
-                    break;
-
-                }
-
+                x86operand op1;
+                x86operand op2;
                 if (retReg == Register::RAX) {
-                    x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
-                    x86operand op2 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
-                    Instr* newInstr = new Instr(type, { op1, op2 });
-                    block.push_back(newInstr);
+                    op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
+                    op2 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
                 }
                 else {
-                    x86operand op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
-                    x86operand op2 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
-                    Instr* newInstr = new Instr(type, { op1, op2 });
-                    block.push_back(newInstr);
+                    op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
+                    op2 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
                 }
+                block.push_back(new Instr(tokenInstrMatch[opcode], { op1, op2 }));
             }
             break;
     }
