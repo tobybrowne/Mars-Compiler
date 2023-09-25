@@ -84,7 +84,7 @@ int main() {
     std::vector<Instr*> funcContent = generateCodeBlock(astRootNode, state);
     block.insert(block.end(), funcContent.begin(), funcContent.end());
 
-    block.push_back(new Instr(InstrType::ADD, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, mainLocalSpace) }));
+    block.push_back(new Instr(InstrType::ADD, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, mainLocalSpace) }, "ENDFUNCf"));
     block.push_back(new Instr(InstrType::RET, {}));
     
 

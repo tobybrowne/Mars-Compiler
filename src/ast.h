@@ -105,14 +105,12 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable, bool n
 
             ExprNode* prevExprNode = rootExprNode;
             while (interNode->childrenNodes[2]->childrenNodes.size() != 1) {
-                std::cout << "yo" << std::endl;
                 opcode = findOpcode(interNode->childrenNodes[2]->childrenNodes[0]);
 
 
                 operand1 = operand2;
                 operand2 = createExprTreeAST(interNode->childrenNodes[2]->childrenNodes[1], symbolTable);
 
-                std::cout << "yo" << std::endl;
 
 
                 ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
@@ -217,11 +215,11 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
     newSymTblEntry->name = varName;
     newSymTblEntry->classType = ClassType::VARIABLE;
     newSymTblEntry->dataType = dataType;
-    newSymTblEntry->varData.frameOffset = symbolTable->currFrameOffset + 1;
+    newSymTblEntry->varData.frameOffset = symbolTable->currFrameOffset;
     symbolTable->entries.push_back(newSymTblEntry);
 
     // increment frame offset
-    symbolTable->currFrameOffset++;
+    symbolTable->currFrameOffset += 8; // for an 64 bit integer
 
     // if declaration has an assignment add an assign node to AST.
     if (varDeclNode->childrenNodes[1]->childrenNodes.size() != 1) {
