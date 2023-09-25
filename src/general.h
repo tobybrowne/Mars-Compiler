@@ -416,21 +416,21 @@ ExprNode::~ExprNode()
 
 NumVarExpr::~NumVarExpr() {
     switch (type) {
-    case(Operand::VAR_NODE): {
-        std::cout << "delete var" << std::endl;
-        delete data.var;
-        break;
-    }
-    case(Operand::EXPR_NODE): {
-        std::cout << "delete expr" << std::endl;
-        delete data.expr;
-        break;
-    }
-    case(Operand::NUMCONST_NODE): {
-        std::cout << "delete num" << std::endl;
-        delete data.numconst;
-        break;
-    }
+        case(Operand::VAR_NODE): {
+            std::cout << "delete var" << std::endl;
+            delete data.var;
+            break;
+        }
+        case(Operand::EXPR_NODE): {
+            std::cout << "delete expr" << std::endl;
+            delete data.expr;
+            break;
+        }
+        case(Operand::NUMCONST_NODE): {
+            std::cout << "delete num" << std::endl;
+            delete data.numconst;
+            break;
+        }
     }
 }
 
@@ -458,6 +458,7 @@ public:
         struct {
             VarNode* variable;
             NumVarExpr* init;
+            bool assignment;
         } declNode;
 
         struct {

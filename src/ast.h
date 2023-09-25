@@ -192,6 +192,13 @@ bool varDeclaredInScope(SymbolTable* currentTable, std::string varName) {
 Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
     Stmt* newDeclNode = new Stmt(Statement::DECL_NODE);
 
+    bool assignment = true;
+    if (varDeclNode->childrenNodes[1]->childrenNodes.size() == 1) {
+        assignment = false;
+    }
+
+    newDeclNode->declNode.assignment = assignment;
+
     // create varNode...
     std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
 
@@ -203,14 +210,18 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
     TokenType dataTypeToken = (varDeclNode->childrenNodes)[0]->childrenNodes[0]->token.type;
     Datatype dataType;
 
+
     switch (dataTypeToken) {
-    case TokenType::_INT:
-        dataType = Datatype::INT;
+        case TokenType::_INT:
+            dataType = Datatype::INT;
     }
 
-    // this must be calculated before the table entry is made.
-    NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
-
+    if (assignment == true){
+        // this must be calculated before the table entry is made.
+        NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
+        newDeclNode->declNode.init = init;
+    }
+    
     // add to symbol table...
     TableEntry* newSymTblEntry = new TableEntry;
     newSymTblEntry->name = varName;
@@ -223,8 +234,6 @@ Stmt* createVarDeclNodeAST(CstNode* varDeclNode, SymbolTable* symbolTable) {
     symbolTable->currFrameOffset++;
 
     newDeclNode->declNode.variable = new VarNode(varName, newSymTblEntry);
-
-    newDeclNode->declNode.init = init;
 
     return newDeclNode;
 }
