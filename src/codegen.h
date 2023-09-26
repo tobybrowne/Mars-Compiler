@@ -51,6 +51,11 @@ std::string displayMachineCode(std::vector<Instr*> program) {
     return programString;
 }
 
+void merge(std::vector<Instr*> &block1, std::vector<Instr*> &block2) {
+    block1.insert(block1.end(), block2.begin(), block2.end());
+}
+
+
 // generates code to calculate the result of an expression tree and store it in R2.
 // write this so it doesn't need an input block?
 std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*> block, Register retReg) {
@@ -80,7 +85,7 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
                 switch (operandTypes[i]) {
                     case Operand::EXPR_NODE: {
                         std::vector<Instr*> newInstrs = generateExprCode(operands[i], block, registers[i]);
-                        block.insert(block.end(), newInstrs.begin(), newInstrs.end());
+                        merge(block, newInstrs);
                         break;
                     }
                     case Operand::VAR_NODE: {
@@ -124,7 +129,6 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
             }
             break;
     }
-
     return block;
 }
 
@@ -134,19 +138,18 @@ std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state);
 std::vector<Instr*> generateWhileCode(Stmt* whileNode, programState state) {
     state.whileCount++;
 
-
     std::vector<Instr*> block;
     NumVarExpr* condition = whileNode->whileNode.condition;
     std::string whileCountStr = std::to_string(state.whileCount);
     block.push_back(new Instr(InstrType::LABEL, {}, "STARTLOOP" + whileCountStr)); // cmp rax #0 
     std::vector<Instr*> evalExpr = generateExprCode(condition, {}, Register::RAX);
-    block.insert(block.end(), evalExpr.begin(), evalExpr.end()); 
+    merge(block, evalExpr);
 
     block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0 
     block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::LABEL, "ENDLOOP"+whileCountStr)})); // cmp rax #0 
     
     std::vector<Instr*> whileBlock = generateCodeBlock(whileNode->whileNode.body, state);
-    block.insert(block.end(), whileBlock.begin(), whileBlock.end()); // block += whileBlock
+    merge(block, whileBlock);
     block.push_back(new Instr(InstrType::JMP, { x86operand(x86OperandTypes::LABEL, "STARTLOOP" + whileCountStr) })); // cmp rax #0 
     block.push_back(new Instr(InstrType::LABEL, {}, "ENDLOOP"+whileCountStr)); // cmp rax #0 
     
@@ -168,13 +171,12 @@ std::vector<Instr*> generateIfCode(Stmt* ifNode, programState state) {
         elseBlock[0]->label = "ELSE" + ifCountStr; // label else block
         block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::LABEL, "ELSE"+ ifCountStr)})); // cmp rax #0 
         ifBlock.push_back(new Instr(InstrType::JMP, { x86operand(x86OperandTypes::LABEL, "END" + ifCountStr) })); // cmp rax #0 )
-        block.insert(block.end(), ifBlock.begin(), ifBlock.end()); // block += ifBlock
-        block.insert(block.end(), elseBlock.begin(), elseBlock.end()); // block += elseBlock
-        
+        merge(block, ifBlock);
+        merge(block, elseBlock);
     }
     else {
         block.push_back(new Instr(InstrType::JE, { x86operand(x86OperandTypes::LABEL, "END" + ifCountStr) }));
-        block.insert(block.end(), ifBlock.begin(), ifBlock.end()); // block += ifBlock
+        merge(block, ifBlock);
     }
 
     block.push_back(new Instr(InstrType::LABEL, {}, "END"+ ifCountStr)); // cmp rax #0 
@@ -209,7 +211,7 @@ std::vector<Instr*> generateReturnCode(Stmt* retNode, programState state) {
 
     // place operand in RAX (return register)
     if (retNode->retNode.operandPresent) {
-        block = generateExprCode(retNode->retNode.operand, {}, Register::RBX);
+        block = generateExprCode(retNode->retNode.operand, {}, Register::RAX);
     }
     block.push_back(new Instr(InstrType::JMP, {x86operand(x86OperandTypes::LABEL, "ENDFUNCf")}));
     return block;
@@ -239,7 +241,7 @@ std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state) {
                 newInstrs = generateReturnCode(statement, state);
                 break;
         }
-        block.insert(block.end(), newInstrs.begin(), newInstrs.end()); // block += newInstr
+        merge(block, newInstrs);
     }
     return block;
 }

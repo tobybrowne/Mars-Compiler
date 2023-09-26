@@ -169,7 +169,6 @@ Stmt* createAssignNodeAST(CstNode* exp, SymbolTable* symbolTable) {
     }
     // simpleExp...
     else {
-        std::cout << "create simple exp" << std::endl;
         newAssignNode->assignNode.furtherAssign = false;
         newAssignNode->assignNode.init.exprTree = createExprTreeAST(furtherExp->childrenNodes[0], symbolTable);
     }
