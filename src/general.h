@@ -185,21 +185,36 @@ enum class ClassType {
 };
 
 class TableEntry {
-public:
-    std::string name;
-    ClassType classType;
-    Datatype dataType; // holds the return type or var type.
+    public:
+        std::string name;
+        ClassType classType;
+        Datatype dataType; // holds the return type or var type.
 
-    union {
-        struct {
-            int frameOffset;
-        } varData;
+        union {
+            struct {
+                int frameOffset;
+            } varData;
 
-        struct {
-            int memRequired;
-        } funcData;
-    };
+            struct {
+                int memRequired;
+            } funcData;
+        };
 
+        // var constructor
+        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int frameOffInp) {
+            name = inpName;
+            classType = inpClassType;
+            dataType = inpDataType;
+            varData.frameOffset = frameOffInp;
+        }
+
+        // func constuctor
+        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int memReqInp) {
+            name = inpName;
+            classType = inpClassType;
+            dataType = inpDataType;
+            funcData.memRequired = memReqInp;
+        }
 };
 
 class SymbolTable {

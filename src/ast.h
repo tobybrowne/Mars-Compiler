@@ -99,19 +99,13 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable, bool n
             rootExprNode->a = operand1;
             rootExprNode->b = operand2;
 
-
-
             // manages when multiple "same-level" operations are stacked "+" and "-" for example.
-
             ExprNode* prevExprNode = rootExprNode;
             while (interNode->childrenNodes[2]->childrenNodes.size() != 1) {
                 opcode = findOpcode(interNode->childrenNodes[2]->childrenNodes[0]);
 
-
                 operand1 = operand2;
                 operand2 = createExprTreeAST(interNode->childrenNodes[2]->childrenNodes[1], symbolTable);
-
-
 
                 ExprNode* newExprNode = new ExprNode(opcode, operand1->type, operand2->type);
                 newExprNode->a = operand1;
@@ -210,11 +204,7 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
     }
 
     // add to symbol table...
-    TableEntry* newSymTblEntry = new TableEntry;
-    newSymTblEntry->name = varName;
-    newSymTblEntry->classType = ClassType::VARIABLE;
-    newSymTblEntry->dataType = dataType;
-    newSymTblEntry->varData.frameOffset = symbolTable->currFrameOffset;
+    TableEntry* newSymTblEntry = new TableEntry(varName, ClassType::VARIABLE, dataType, symbolTable->currFrameOffset);
     symbolTable->entries.push_back(newSymTblEntry);
 
     // increment frame offset
@@ -277,7 +267,6 @@ Stmt* createIfNodeAST(CstNode* cstSelectStmt, SymbolTable* symbolTable) {
 
     // if else statement is present...
     if (childrenNodes.size() == 7) {
-        
         newIfNode->ifNode.elsePresent = true;
         newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[6], symbolTable);
     }
