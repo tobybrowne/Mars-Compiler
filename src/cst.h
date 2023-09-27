@@ -1,4 +1,3 @@
-
 #include "general.h"
 // recursive function to validate a provided grammar pattern for the current point in the token stream.
 // CONSIDER: Rewrite without pointers, just put the object itself inside the vector.

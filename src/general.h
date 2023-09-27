@@ -257,6 +257,7 @@ enum class CstNonTerminal {
     PARMS,
     PARM_LIST,
     PARM_DEF,
+    FUNC_CALL
 };
 
 
@@ -321,7 +322,8 @@ enum class Node {
 enum class Operand {
     VAR_NODE,
     EXPR_NODE,
-    NUMCONST_NODE
+    NUMCONST_NODE,
+    FUNCCALL_NODE
 };
 
 enum class Statement {
@@ -388,6 +390,23 @@ NumConstNode::NumConstNode()
 {
 }
 
+//TODO: maybe migrate more storage from the AST to the symbol table.
+// e.g: for the function stuff basically nothing is stored in the AST
+// it just points to the symbol table.
+// AST isn't for storage of data it's to show the flow of operations.
+
+class FuncCallNode {
+public:
+    TableEntry* tableEntry;
+
+    FuncCallNode(TableEntry* inpTblEntry) {
+        tableEntry = inpTblEntry;
+    }
+};
+
+
+
+
 // only used as a medium to return data from specific functions.
 // this way the classes stay type-safe, only storing one of the three operand types, but the code is much nicer.
 
@@ -401,11 +420,12 @@ public:
         NumConstNode* numconst;
         VarNode* var;
         ExprNode* expr;
+        FuncCallNode* funccall;
     } data;
 
     ~NumVarExpr();
 
-    NumVarExpr(Operand inpType, std::variant<NumConstNode*, VarNode*, ExprNode*> inpData) {
+    NumVarExpr(Operand inpType, std::variant<NumConstNode*, VarNode*, ExprNode*, FuncCallNode*> inpData) {
         type = inpType;
         switch (type) {
         case Operand::VAR_NODE:
@@ -417,9 +437,14 @@ public:
         case Operand::EXPR_NODE:
             data.expr = std::get<ExprNode*>(inpData);
             break;
+        case Operand::FUNCCALL_NODE:
+            data.funccall = std::get<FuncCallNode*>(inpData);
+            break;
         }
     };
 };
+
+
 
 
 
@@ -451,6 +476,7 @@ ExprNode::~ExprNode()
     delete b;
 }
 
+// TODO: Add funccall destructor.
 NumVarExpr::~NumVarExpr() {
     switch (type) {
         case(Operand::VAR_NODE): {
@@ -637,5 +663,6 @@ void defineLanguageGrammar() {
     patternList[CstNonTerminal::MUL_EXP__] = { {CstNonTerminal::MUL_OP, CstNonTerminal::FACTOR, CstNonTerminal::MUL_EXP__}, {TokenType::_E} };
     patternList[CstNonTerminal::MUL_OP] = { {TokenType::_MUL}, {TokenType::_DIV} };
 
-    patternList[CstNonTerminal::FACTOR] = { {TokenType::_NUMCONST}, {TokenType::_ID} };
+    patternList[CstNonTerminal::FACTOR] = { {TokenType::_NUMCONST}, {CstNonTerminal::FUNC_CALL},  {TokenType::_ID} };
+    patternList[CstNonTerminal::FUNC_CALL] = { {TokenType::_ID, TokenType::_OPENBRACK, TokenType::_CLOSEBRACK} };
 }

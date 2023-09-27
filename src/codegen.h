@@ -60,6 +60,13 @@ void merge(std::vector<Instr*> &block1, std::vector<Instr*> &block2) {
 // write this so it doesn't need an input block?
 std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*> block, Register retReg) {
     switch (numVarExpr->type) {
+        case Operand::FUNCCALL_NODE:
+            block.push_back(new Instr(InstrType::CALL, { x86operand(x86OperandTypes::LABEL, numVarExpr->data.funccall->tableEntry->name)}));
+            // rax is the return register
+            if (retReg != Register::RAX) {
+                block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::REGISTER, Register::RAX) }));
+            }
+            break;
         case Operand::VAR_NODE:
             block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::STACK_OFFSET, numVarExpr->data.var->tableEntry->varData.frameOffset) }));
             break;
@@ -88,12 +95,20 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
                         merge(block, newInstrs);
                         break;
                     }
+
+                    // TO DO: can these be absorbed with the defs at the start by doing another func call?
                     case Operand::VAR_NODE: {
                         block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::STACK_OFFSET, operands[i]->data.var->tableEntry->varData.frameOffset) }));
                         break;
                     }                       // should be able to get rid of this extra move and set the numconst as an operand
                     case Operand::NUMCONST_NODE: {
                         block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::IMMEDIATE, operands[i]->data.numconst->val) }));
+                        break;
+                    }
+                    case Operand::FUNCCALL_NODE: {
+                        block.push_back(new Instr(InstrType::CALL, { x86operand(x86OperandTypes::LABEL, operands[i]->data.funccall->tableEntry->name) }));
+                        // rax is the return register
+                        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::REGISTER, Register::RAX)}));
                         break;
                     }
                 }
@@ -213,7 +228,7 @@ std::vector<Instr*> generateReturnCode(Stmt* retNode, programState state) {
     if (retNode->retNode.operandPresent) {
         block = generateExprCode(retNode->retNode.operand, {}, Register::RAX);
     }
-    block.push_back(new Instr(InstrType::JMP, {x86operand(x86OperandTypes::LABEL, "ENDFUNCf")}));
+    block.push_back(new Instr(InstrType::JMP, {x86operand(x86OperandTypes::LABEL, ".ENDFUNC")}));
     return block;
 }
 
@@ -224,7 +239,7 @@ std::vector<Instr*> generateFunctionDecl(Stmt* funcNode, programState state) {
     block.push_back(new Instr(InstrType::LABEL, {}, funcName)); // cmp rax #0 
     block.push_back(new Instr(InstrType::SUB, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, symTblEntry->funcData.memRequired) }));
     merge(block, generateCodeBlock(funcNode->funcDeclNode.innerCode, state));
-    block.push_back(new Instr(InstrType::ADD, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, symTblEntry->funcData.memRequired) }, "ENDFUNCf"));
+    block.push_back(new Instr(InstrType::ADD, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, symTblEntry->funcData.memRequired) }, ".ENDFUNC"));
     block.push_back(new Instr(InstrType::RET, {}));
     
     return block;

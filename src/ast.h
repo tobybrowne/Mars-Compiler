@@ -19,9 +19,9 @@ bool expressionInUse(CstNode* cstExprNode) {
     }
 }
 
-TableEntry* getTblEntry(SymbolTable* currentTable, std::string varName) {
+TableEntry* getTblEntry(SymbolTable* currentTable, std::string name, ClassType classType) {
     for (TableEntry* entry : currentTable->entries) {
-        if (entry->classType == ClassType::VARIABLE && entry->name == varName) {
+        if (entry->classType == classType && entry->name == name) {
             return entry;
         }
     }
@@ -31,7 +31,7 @@ TableEntry* getTblEntry(SymbolTable* currentTable, std::string varName) {
         return NULL;
     }
     else {
-        return getTblEntry(currentTable->upperTable, varName);
+        return getTblEntry(currentTable->upperTable, name, classType);
     }
 }
 
@@ -46,28 +46,51 @@ TokenType findOpcode(CstNode* cstExprNode) {
 }
 
 // converts CST expression tree into an AST expression tree.
+// TODO: Check for double declaration of func nodes.
 NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable, bool negate = false) {
     CstNonTerminal expressionType = cstExpr->val.nonTerm;
     std::vector<CstNode*> childrenNodes = cstExpr->childrenNodes;
 
-    if (expressionType == CstNonTerminal::FACTOR) {
-        Token factorToken = childrenNodes[0]->token;
-        TokenType factorType = factorToken.type;
-        NumVarExpr* newNumVarExpr;
 
-        if (factorType == TokenType::_NUMCONST) {
-            newNumVarExpr = new NumVarExpr(Operand::NUMCONST_NODE, new NumConstNode(factorToken.numConstVal));
+    // TO DO try and merge variable and function code here (its quite similar).
+    if (expressionType == CstNonTerminal::FACTOR) {
+        NumVarExpr* newNumVarExpr;
+        // if either numconst or id
+        if (childrenNodes[0]->isToken) {
+            Token factorToken = childrenNodes[0]->token;
+            TokenType factorType = factorToken.type;
+
+            if (factorType == TokenType::_NUMCONST) {
+                newNumVarExpr = new NumVarExpr(Operand::NUMCONST_NODE, new NumConstNode(factorToken.numConstVal));
+            }
+            else if (factorType == TokenType::_ID) {
+                TableEntry* tblEntry = getTblEntry(symbolTable, factorToken.varName, ClassType::VARIABLE);
+
+                if (tblEntry == NULL) {
+                    std::cout << "VARIABLE " << factorToken.varName << " NOT DECLARED!]" << std::endl;
+                    getchar();
+                }
+                newNumVarExpr = new NumVarExpr(Operand::VAR_NODE, new VarNode(factorToken.varName, tblEntry));
+            }
+            
         }
-        else if (factorType == TokenType::_ID) {
-            TableEntry* tblEntry = getTblEntry(symbolTable, factorToken.varName);
+
+        // if function call
+        else {
+            CstNode* funcCallNode = childrenNodes[0];
+            std::string funcName = funcCallNode->childrenNodes[0]->token.varName;
+
+            TableEntry* tblEntry = getTblEntry(symbolTable, funcName, ClassType::FUNCTION);
 
             if (tblEntry == NULL) {
-                std::cout << "VARIABLE " << factorToken.varName << " NOT DECLARED!]" << std::endl;
+                std::cout << "FUNCTION " << funcName << " NOT DECLARED!]" << std::endl;
                 getchar();
             }
-            newNumVarExpr = new NumVarExpr(Operand::VAR_NODE, new VarNode(factorToken.varName, tblEntry));
+            newNumVarExpr = new NumVarExpr(Operand::FUNCCALL_NODE, new FuncCallNode(tblEntry));
         }
+
         return newNumVarExpr;
+        
     }
 
     // if in use
@@ -143,7 +166,7 @@ Stmt* createAssignNodeAST(CstNode* exp, SymbolTable* symbolTable) {
 
     Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
     std::string varName = exp->childrenNodes[0]->token.varName;
-    TableEntry* tblEntry = getTblEntry(symbolTable, varName);
+    TableEntry* tblEntry = getTblEntry(symbolTable, varName, ClassType::VARIABLE);
 
     if (tblEntry == NULL) {
         std::cout << "VARIABLE " << varName << " NOT DECLARED!]" << std::endl;
@@ -168,9 +191,9 @@ Stmt* createAssignNodeAST(CstNode* exp, SymbolTable* symbolTable) {
     return newAssignNode;
 }
 
-bool varDeclaredInScope(SymbolTable* currentTable, std::string varName) {
+bool declaredInScope(SymbolTable* currentTable, std::string varName, ClassType classType) {
     for (TableEntry* entry : currentTable->entries) {
-        if (entry->classType == ClassType::VARIABLE && entry->name == varName) {
+        if (entry->classType == classType && entry->name == varName) {
             return true;
         }
     }
@@ -196,7 +219,7 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
         CstNode* varDeclNode = childrenNodes[0]->childrenNodes[0];
         std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
 
-        if (varDeclaredInScope(symbolTable, varName)) {
+        if (declaredInScope(symbolTable, varName, ClassType::VARIABLE)) {
             std::cout << "VARIABLE " << varName << " DECLARED TWICE!]" << std::endl;
             getchar();
         }
@@ -235,11 +258,16 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
         Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
         
         // TO DO: rename varName to idName in token class
-        std::string functionName = funcNode->childrenNodes[1]->token.varName;
+        std::string funcName = funcNode->childrenNodes[1]->token.varName;
         
         funcDecl->funcDeclNode.innerCode = createStmtSeqNodeAST(funcNode->childrenNodes[5], symbolTable);
         
         decASTNodeVector.push_back(funcDecl);
+
+        if (declaredInScope(symbolTable, funcName, ClassType::FUNCTION)) {
+            std::cout << "FUNCTION " << funcName << " DECLARED TWICE!]" << std::endl;
+            getchar();
+        }
 
         TokenType dataTypeToken = funcNode->childrenNodes[0]->childrenNodes[0]->token.type;
         Datatype dataType;
@@ -249,7 +277,7 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
         }
 
         // add to symbol table...
-        TableEntry* newSymTblEntry = new TableEntry(functionName, ClassType::FUNCTION, dataType, 100);
+        TableEntry* newSymTblEntry = new TableEntry(funcName, ClassType::FUNCTION, dataType, 100);
         symbolTable->entries.push_back(newSymTblEntry);
 
         funcDecl->funcDeclNode.tableEntry = newSymTblEntry;
@@ -289,6 +317,12 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable) {
 
     return newStmtSeqNode;
 }
+
+//TO DO: add logical error checks to ensure that a function has been defined before a call
+// as well as that it returns a value when required
+// perhaps add the ability for functions to just be called
+// not have to be useful just because of their return value
+
 
 // creates AST if node from CST node.
 Stmt* createIfNodeAST(CstNode* cstSelectStmt, SymbolTable* symbolTable) {
