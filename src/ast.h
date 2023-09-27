@@ -258,7 +258,7 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
 
         funcDecl->funcDeclNode.tableEntry = newSymTblEntry;
 
-        //TO DO: calculate memory required for functoin
+        //TO DO: calculate memory required for function
     }
 
     decASTNodeVector = createDeclListAST(childrenNodes[1], decASTNodeVector, symbolTable); // manages further decList
@@ -271,26 +271,19 @@ std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtAS
 // converts CST cmpdStmt to AST stmtSeqNode
 // this is the only time a new scope is entered (very nice).
 Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable) {
-    std::cout << "stmt" << std::endl;
     std::vector<Stmt*> decList;
     std::vector<Stmt*> stmtList;
     std::vector<CstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
-
-    std::cout << "hi" << std::endl;
 
     // defines new symbol table for new scope
     SymbolTable* innerSymbolTable = new SymbolTable;
     innerSymbolTable->upperTable = symbolTable;
     innerSymbolTable->currFrameOffset = symbolTable->currFrameOffset;
 
-    std::cout << "hello" << std::endl;
-
     Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
 
     // manages decList...
     decList = createDeclListAST(childrenNodes[1], {}, innerSymbolTable);
-
-    std::cout << "hey" << std::endl;
 
     // manages stmtList...
     stmtList = createStmtListAST(childrenNodes[2], {}, innerSymbolTable);
@@ -405,7 +398,9 @@ Stmt* createAST(CstNode* cstRootNode) {
     // currently first node is always a compoundStmt node.
     // starts in the global scope.
     SymbolTable* globalTable = new SymbolTable();
-    Stmt* astRootNode = createStmtSeqNodeAST(cstRootNode, globalTable);
+
+    Stmt* astRootNode = new Stmt(Statement::STMTSEQ_NODE);
+    astRootNode->seqNode.stmts = createDeclListAST(cstRootNode->childrenNodes[0], {}, globalTable);
 
     std::cout << "finish" << std::endl;
 

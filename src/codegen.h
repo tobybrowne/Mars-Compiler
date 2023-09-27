@@ -2,7 +2,7 @@
 #include "general.h"
 
 std::string displayMachineCode(std::vector<Instr*> program) {
-    std::string programString = "\nformat PE64 NX GUI 6.0\nentry start \nsection '.text' code readable executable \nstart : \n";
+    std::string programString = "\nformat PE64 NX GUI 6.0\nentry start \nsection '.text' code readable executable \nstart :";
 
     for (Instr* instruction : program) {
         std::string instructStr = "\n";

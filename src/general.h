@@ -222,6 +222,7 @@ public:
 };
 
 enum class CstNonTerminal {
+    PROGRAM,
     STMT,
     EXP_STMT,
     COMPOUND_STMT,
@@ -577,6 +578,9 @@ Stmt::~Stmt() {
 std::map<CstNonTerminal, std::vector<std::vector<std::variant<TokenType, CstNonTerminal>>>> patternList;
 
 void defineLanguageGrammar() {
+    //TO DO: stop functions being defined inside of functions.
+    patternList[CstNonTerminal::PROGRAM] = {{CstNonTerminal::DEC_LIST, TokenType::_ADD}};
+
     patternList[CstNonTerminal::STMT] = { {CstNonTerminal::EXP_STMT}, {CstNonTerminal::COMPOUND_STMT}, {CstNonTerminal::SELECT_STMT}, {CstNonTerminal::ITER_STMT}, {CstNonTerminal::RETURN_STMT}, {CstNonTerminal::BREAK_STMT} };
 
     patternList[CstNonTerminal::EXP_STMT] = { {CstNonTerminal::EXP, TokenType::_SEMI}, {TokenType::_SEMI} };
@@ -584,7 +588,7 @@ void defineLanguageGrammar() {
     patternList[CstNonTerminal::COMPOUND_STMT] = { {TokenType::_OPENCURLY, CstNonTerminal::DEC_LIST, CstNonTerminal::STMT_LIST, TokenType::_CLOSECURLY} };
     patternList[CstNonTerminal::DEC_LIST] = { {CstNonTerminal::DECL, CstNonTerminal::DEC_LIST}, {TokenType::_E} };
 
-    patternList[CstNonTerminal::DECL] = { {CstNonTerminal::VAR_DECL}, {CstNonTerminal::FUN_DECL} };
+    patternList[CstNonTerminal::DECL] = { {CstNonTerminal::VAR_DECL}, {CstNonTerminal::FUN_DECL}};
 
     // atm functions have to have a type.
     patternList[CstNonTerminal::FUN_DECL] = { {CstNonTerminal::TYPESPEC, TokenType::_ID, TokenType::_OPENBRACK, CstNonTerminal::PARMS, TokenType::_CLOSEBRACK, CstNonTerminal::COMPOUND_STMT}};
