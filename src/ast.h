@@ -230,16 +230,12 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
 
     // if its a function declaration
     else {
-        std::cout << "call for function" << std::endl;
         CstNode* funcNode = childrenNodes[0]->childrenNodes[0];
         
         Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
         
         // TO DO: rename varName to idName in token class
         std::string functionName = funcNode->childrenNodes[1]->token.varName;
-
-        std::cout << "hi" << std::endl;
-
         
         funcDecl->funcDeclNode.innerCode = createStmtSeqNodeAST(funcNode->childrenNodes[5], symbolTable);
         
@@ -401,8 +397,6 @@ Stmt* createAST(CstNode* cstRootNode) {
 
     Stmt* astRootNode = new Stmt(Statement::STMTSEQ_NODE);
     astRootNode->seqNode.stmts = createDeclListAST(cstRootNode->childrenNodes[0], {}, globalTable);
-
-    std::cout << "finish" << std::endl;
 
     return astRootNode;
 }

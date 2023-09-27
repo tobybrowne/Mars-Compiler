@@ -172,5 +172,10 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
         tokenList.push_back(tokenObj);
     }
 
+    // Add End of File Token
+    Token tokenObj;
+    tokenObj.type = TokenType::_EOF;
+    tokenList.push_back(tokenObj);
+
     return tokenList;
 }

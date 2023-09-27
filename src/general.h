@@ -53,7 +53,8 @@ enum class TokenType {
     _AND,
     _OR,
     _NOT,
-    _E
+    _E,
+    _EOF
 };
 
 class programState {
@@ -579,7 +580,7 @@ std::map<CstNonTerminal, std::vector<std::vector<std::variant<TokenType, CstNonT
 
 void defineLanguageGrammar() {
     //TO DO: stop functions being defined inside of functions.
-    patternList[CstNonTerminal::PROGRAM] = {{CstNonTerminal::DEC_LIST, TokenType::_ADD}};
+    patternList[CstNonTerminal::PROGRAM] = {{CstNonTerminal::DEC_LIST, TokenType::_EOF}};
 
     patternList[CstNonTerminal::STMT] = { {CstNonTerminal::EXP_STMT}, {CstNonTerminal::COMPOUND_STMT}, {CstNonTerminal::SELECT_STMT}, {CstNonTerminal::ITER_STMT}, {CstNonTerminal::RETURN_STMT}, {CstNonTerminal::BREAK_STMT} };
 
