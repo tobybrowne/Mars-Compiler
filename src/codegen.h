@@ -217,6 +217,19 @@ std::vector<Instr*> generateReturnCode(Stmt* retNode, programState state) {
     return block;
 }
 
+std::vector<Instr*> generateFunctionDecl(Stmt* funcNode, programState state) {
+    std::vector<Instr*> block;
+    TableEntry* symTblEntry = funcNode->funcDeclNode.tableEntry;
+    std::string funcName = symTblEntry->name;
+    block.push_back(new Instr(InstrType::LABEL, {}, funcName)); // cmp rax #0 
+    block.push_back(new Instr(InstrType::SUB, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, symTblEntry->funcData.memRequired) }));
+    merge(block, generateCodeBlock(funcNode->funcDeclNode.innerCode, state));
+    block.push_back(new Instr(InstrType::ADD, { x86operand(x86OperandTypes::REGISTER, Register::RSP), x86operand(x86OperandTypes::IMMEDIATE, symTblEntry->funcData.memRequired) }, "ENDFUNCf"));
+    block.push_back(new Instr(InstrType::RET, {}));
+    
+    return block;
+}
+
 std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state) {
     std::vector<Instr*> block;
     for (Stmt* statement : seqNode->seqNode.stmts) {
@@ -240,9 +253,13 @@ std::vector<Instr*> generateCodeBlock(Stmt* seqNode, programState state) {
             case Statement::RET_NODE:
                 newInstrs = generateReturnCode(statement, state);
                 break;
+            case Statement::FUNC_DECL_NODE:
+                newInstrs = generateFunctionDecl(statement, state);
+                break;
         }
         merge(block, newInstrs);
     }
     return block;
 }
+
 

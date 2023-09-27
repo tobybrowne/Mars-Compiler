@@ -200,20 +200,17 @@ class TableEntry {
             } funcData;
         };
 
-        // var constructor
-        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int frameOffInp) {
+        // var and func constructor
+        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int intInp) {
             name = inpName;
             classType = inpClassType;
             dataType = inpDataType;
-            varData.frameOffset = frameOffInp;
-        }
-
-        // func constuctor
-        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int memReqInp) {
-            name = inpName;
-            classType = inpClassType;
-            dataType = inpDataType;
-            funcData.memRequired = memReqInp;
+            if (inpClassType == ClassType::VARIABLE) {
+                varData.frameOffset = intInp;
+            }
+            else {
+                funcData.memRequired = intInp;
+            } 
         }
 };
 
@@ -223,10 +220,6 @@ public:
     int currFrameOffset = 0;
     std::vector<TableEntry*> entries;
 };
-
-
-
-
 
 enum class CstNonTerminal {
     STMT,
@@ -256,7 +249,12 @@ enum class CstNonTerminal {
     MUL_EXP,
     MUL_EXP__,
     MUL_OP,
-    FACTOR
+    FACTOR,
+    DECL,
+    FUN_DECL,
+    PARMS,
+    PARM_LIST,
+    PARM_DEF,
 };
 
 
@@ -325,7 +323,6 @@ enum class Operand {
 };
 
 enum class Statement {
-    DECL_NODE,
     ASSIGN_NODE,
     IF_NODE,
     WHILE_NODE,
@@ -333,6 +330,7 @@ enum class Statement {
     STMTSEQ_NODE,
     RET_NODE,
     BREAK_NODE,
+    FUNC_DECL_NODE
 };
 
 
@@ -511,6 +509,16 @@ public:
             NumVarExpr* operand;
         } retNode;
 
+        // x86 only needs:
+        // function name
+        // the actual code
+        // sort out the rest as we get to it (params, returns, etc...)
+        // cant store function name in Union :(
+        struct {
+            Stmt* innerCode;
+            TableEntry* tableEntry;
+        } funcDeclNode;
+
     };
     Stmt(Statement stmtType);
     ~Stmt();
@@ -574,8 +582,20 @@ void defineLanguageGrammar() {
     patternList[CstNonTerminal::EXP_STMT] = { {CstNonTerminal::EXP, TokenType::_SEMI}, {TokenType::_SEMI} };
 
     patternList[CstNonTerminal::COMPOUND_STMT] = { {TokenType::_OPENCURLY, CstNonTerminal::DEC_LIST, CstNonTerminal::STMT_LIST, TokenType::_CLOSECURLY} };
-    patternList[CstNonTerminal::DEC_LIST] = { {CstNonTerminal::VAR_DECL, CstNonTerminal::DEC_LIST}, {TokenType::_E} };
+    patternList[CstNonTerminal::DEC_LIST] = { {CstNonTerminal::DECL, CstNonTerminal::DEC_LIST}, {TokenType::_E} };
 
+    patternList[CstNonTerminal::DECL] = { {CstNonTerminal::VAR_DECL}, {CstNonTerminal::FUN_DECL} };
+
+    // atm functions have to have a type.
+    patternList[CstNonTerminal::FUN_DECL] = { {CstNonTerminal::TYPESPEC, TokenType::_ID, TokenType::_OPENBRACK, CstNonTerminal::PARMS, TokenType::_CLOSEBRACK, CstNonTerminal::COMPOUND_STMT}};
+    
+    // either has parameters or doesn't
+    patternList[CstNonTerminal::PARMS] = { {CstNonTerminal::PARM_LIST}, {TokenType::_E} };
+
+    patternList[CstNonTerminal::PARM_LIST] = { {CstNonTerminal::PARM_DEF, TokenType::_SEMI, CstNonTerminal::PARM_LIST}, {TokenType::_E} };
+    patternList[CstNonTerminal::PARM_DEF] = { {CstNonTerminal::TYPESPEC, TokenType::_ID} };
+
+    // can't do int a=42, y=30
     patternList[CstNonTerminal::VAR_DECL] = { {CstNonTerminal::TYPESPEC, CstNonTerminal::VAR_DECL_INIT, TokenType::_SEMI} };
     patternList[CstNonTerminal::VAR_DECL_INIT] = { {TokenType::_ID, TokenType::_ASSIGN, CstNonTerminal::SIMPLE_EXP}, {TokenType::_ID} };
     patternList[CstNonTerminal::TYPESPEC] = { {TokenType::_INT} };

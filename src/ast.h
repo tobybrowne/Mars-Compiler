@@ -120,8 +120,6 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable, bool n
 
                 interNode = interNode->childrenNodes[2];
             }
-
-
         }
 
         // creates expression node and returns it.
@@ -180,7 +178,12 @@ bool varDeclaredInScope(SymbolTable* currentTable, std::string varName) {
 }
 
 
+Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable);
+
+Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable);
+
 // generates a vector of declerations from the recursive CST decl structure.
+// assume this is global atm (we can remove local function defs later)
 std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector, SymbolTable* symbolTable) {
     std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
 
@@ -188,38 +191,74 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
         return decASTNodeVector;
     }
 
-    CstNode* varDeclNode = childrenNodes[0];
-    std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
+    // if its a variable declaration...
+    if (childrenNodes[0]->childrenNodes[0]->childrenNodes.size() == 3) {
+        CstNode* varDeclNode = childrenNodes[0]->childrenNodes[0];
+        std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
 
-    if (varDeclaredInScope(symbolTable, varName)) {
-        std::cout << "VARIABLE " << varName << " DECLARED TWICE!]" << std::endl;
-        getchar();
+        if (varDeclaredInScope(symbolTable, varName)) {
+            std::cout << "VARIABLE " << varName << " DECLARED TWICE!]" << std::endl;
+            getchar();
+        }
+
+        TokenType dataTypeToken = (varDeclNode->childrenNodes)[0]->childrenNodes[0]->token.type;
+        Datatype dataType;
+        switch (dataTypeToken) {
+            case TokenType::_INT:
+                dataType = Datatype::INT;
+        }
+
+        // add to symbol table...
+        TableEntry* newSymTblEntry = new TableEntry(varName, ClassType::VARIABLE, dataType, symbolTable->currFrameOffset);
+        symbolTable->entries.push_back(newSymTblEntry);
+
+        // increment frame offset
+        symbolTable->currFrameOffset += 8; // for an 64 bit integer
+
+        // if declaration has an assignment add an assign node to AST.
+        if (varDeclNode->childrenNodes[1]->childrenNodes.size() != 1) {
+            Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
+
+            newAssignNode->assignNode.variable = new VarNode(varName, newSymTblEntry);
+            newAssignNode->assignNode.furtherAssign = false; // not possible with declarations atm.
+
+            NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
+            newAssignNode->assignNode.init.exprTree = init;
+            decASTNodeVector.push_back(newAssignNode);
+        }
     }
 
-    TokenType dataTypeToken = (varDeclNode->childrenNodes)[0]->childrenNodes[0]->token.type;
-    Datatype dataType;
-    switch (dataTypeToken) {
-        case TokenType::_INT:
-            dataType = Datatype::INT;
-    }
+    // if its a function declaration
+    else {
+        std::cout << "call for function" << std::endl;
+        CstNode* funcNode = childrenNodes[0]->childrenNodes[0];
+        
+        Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
+        
+        // TO DO: rename varName to idName in token class
+        std::string functionName = funcNode->childrenNodes[1]->token.varName;
 
-    // add to symbol table...
-    TableEntry* newSymTblEntry = new TableEntry(varName, ClassType::VARIABLE, dataType, symbolTable->currFrameOffset);
-    symbolTable->entries.push_back(newSymTblEntry);
+        std::cout << "hi" << std::endl;
 
-    // increment frame offset
-    symbolTable->currFrameOffset += 8; // for an 64 bit integer
+        
+        funcDecl->funcDeclNode.innerCode = createStmtSeqNodeAST(funcNode->childrenNodes[5], symbolTable);
+        
+        decASTNodeVector.push_back(funcDecl);
 
-    // if declaration has an assignment add an assign node to AST.
-    if (varDeclNode->childrenNodes[1]->childrenNodes.size() != 1) {
-        Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
+        TokenType dataTypeToken = funcNode->childrenNodes[0]->childrenNodes[0]->token.type;
+        Datatype dataType;
+        switch (dataTypeToken) {
+            case TokenType::_INT:
+                dataType = Datatype::INT;
+        }
 
-        newAssignNode->assignNode.variable = new VarNode(varName, newSymTblEntry);
-        newAssignNode->assignNode.furtherAssign = false; // not possible with declarations atm.
+        // add to symbol table...
+        TableEntry* newSymTblEntry = new TableEntry(functionName, ClassType::FUNCTION, dataType, 100);
+        symbolTable->entries.push_back(newSymTblEntry);
 
-        NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
-        newAssignNode->assignNode.init.exprTree = init;
-        decASTNodeVector.push_back(newAssignNode);
+        funcDecl->funcDeclNode.tableEntry = newSymTblEntry;
+
+        //TO DO: calculate memory required for functoin
     }
 
     decASTNodeVector = createDeclListAST(childrenNodes[1], decASTNodeVector, symbolTable); // manages further decList
@@ -232,19 +271,26 @@ std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtAS
 // converts CST cmpdStmt to AST stmtSeqNode
 // this is the only time a new scope is entered (very nice).
 Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable) {
+    std::cout << "stmt" << std::endl;
     std::vector<Stmt*> decList;
     std::vector<Stmt*> stmtList;
     std::vector<CstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
+
+    std::cout << "hi" << std::endl;
 
     // defines new symbol table for new scope
     SymbolTable* innerSymbolTable = new SymbolTable;
     innerSymbolTable->upperTable = symbolTable;
     innerSymbolTable->currFrameOffset = symbolTable->currFrameOffset;
 
+    std::cout << "hello" << std::endl;
+
     Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
 
     // manages decList...
     decList = createDeclListAST(childrenNodes[1], {}, innerSymbolTable);
+
+    std::cout << "hey" << std::endl;
 
     // manages stmtList...
     stmtList = createStmtListAST(childrenNodes[2], {}, innerSymbolTable);
