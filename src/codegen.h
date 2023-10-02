@@ -58,7 +58,7 @@ void merge(std::vector<Instr*> &block1, std::vector<Instr*> &block2) {
 
 // generates code to calculate the result of an expression tree and store it in R2.
 // write this so it doesn't need an input block?
-std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*> block, Register retReg) {
+std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*> block, Register retReg, bool root = false) {
     switch (numVarExpr->type) {
         
         // these top ones only run for "expressions" w no opcodes e.g: a = 3;
@@ -83,7 +83,11 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
 
             std::vector<Operand> operandTypes;
             std::vector<NumVarExpr*> operands;
-            std::vector<Register> registers = {Register::RAX, Register::RBX};
+            std::vector<Register> loadRegisters = { Register::RCX, Register::RDX };
+            std::vector<Register> retRegisters = { Register::RAX, Register::RBX };
+
+            std::vector<Register> operandRegisters;
+
 
             operandTypes.push_back(exprTree->aType);
             operands.push_back(exprTree->a);
@@ -96,10 +100,12 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
 
             for (int i = 0; i < operands.size(); i++) {
                 if (operandTypes[i] == Operand::EXPR_NODE) {
-                    block = generateExprCode(operands[i], block, registers[i]);
+                    merge(block, generateExprCode(operands[i], {}, retRegisters[i]));
+                    operandRegisters.push_back(retRegisters[i]);
                 }
                 else {
-                    merge(newBlock, generateExprCode(operands[i], block, registers[i]));
+                    merge(newBlock, generateExprCode(operands[i], block, loadRegisters[i]));
+                    operandRegisters.push_back(loadRegisters[i]);
                 }
             }
             // ensures the order is preserved
@@ -121,17 +127,15 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
             }
 
             else {
-                x86operand op1;
-                x86operand op2;
-                if (retReg == Register::RAX) {
-                    op1 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
-                    op2 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
+                x86operand op1 = x86operand(x86OperandTypes::REGISTER, operandRegisters[0]);
+                x86operand op2 = x86operand(x86OperandTypes::REGISTER, operandRegisters[1]);
+                block.push_back(new Instr(tokenInstrMatch[opcode], { op1, op2}));
+
+                if (retReg != operandRegisters[0]) {
+                    op1 = x86operand(x86OperandTypes::REGISTER, retReg);
+                    op2 = x86operand(x86OperandTypes::REGISTER, operandRegisters[0]);
+                    block.push_back(new Instr(InstrType::MOV, { op1, op2 }));
                 }
-                else {
-                    op1 = x86operand(x86OperandTypes::REGISTER, Register::RBX);
-                    op2 = x86operand(x86OperandTypes::REGISTER, Register::RAX);
-                }
-                block.push_back(new Instr(tokenInstrMatch[opcode], { op1, op2 }));
             }
             break;
     }
@@ -148,7 +152,7 @@ std::vector<Instr*> generateWhileCode(Stmt* whileNode, programState state) {
     NumVarExpr* condition = whileNode->whileNode.condition;
     std::string whileCountStr = std::to_string(state.whileCount);
     block.push_back(new Instr(InstrType::LABEL, {}, "STARTLOOP" + whileCountStr)); // cmp rax #0 
-    std::vector<Instr*> evalExpr = generateExprCode(condition, {}, Register::RAX);
+    std::vector<Instr*> evalExpr = generateExprCode(condition, {}, Register::RAX, true);
     merge(block, evalExpr);
 
     block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0 
@@ -167,7 +171,7 @@ std::vector<Instr*> generateIfCode(Stmt* ifNode, programState state) {
     std::vector<Instr*> block;
     NumVarExpr* condition = ifNode->ifNode.condition;
     std::string ifCountStr = std::to_string(state.ifCount);
-    block = generateExprCode(condition, block, Register::RAX);
+    block = generateExprCode(condition, block, Register::RAX, true);
     block.push_back(new Instr(InstrType::CMP, { x86operand(x86OperandTypes::REGISTER, Register::RAX), x86operand(x86OperandTypes::IMMEDIATE, 0) })); // cmp rax #0 
     
     std::vector<Instr*> ifBlock = generateCodeBlock(ifNode->ifNode.ifBody, state); // = // deal with ifNode.ifBody
@@ -207,7 +211,7 @@ std::vector<Instr*> generateAssignCode(Stmt* assignNode, programState state) {
 
     //get init data... [assuming no further assignment]
     // can function be edited so it doesn't take in an expression?
-    block = generateExprCode(assignNode->assignNode.init.exprTree, {}, Register::RAX);
+    block = generateExprCode(assignNode->assignNode.init.exprTree, {}, Register::RAX, true);
     block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::STACK_OFFSET, stackOffset), x86operand(x86OperandTypes::REGISTER, Register::RAX) })); // cmp rax #0
     return block;
 }
@@ -217,7 +221,7 @@ std::vector<Instr*> generateReturnCode(Stmt* retNode, programState state) {
 
     // place operand in RAX (return register)
     if (retNode->retNode.operandPresent) {
-        block = generateExprCode(retNode->retNode.operand, {}, Register::RAX);
+        block = generateExprCode(retNode->retNode.operand, {}, Register::RAX, true);
     }
     block.push_back(new Instr(InstrType::JMP, {x86operand(x86OperandTypes::LABEL, ".ENDFUNC")}));
     return block;

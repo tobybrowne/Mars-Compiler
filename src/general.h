@@ -109,12 +109,16 @@ std::unordered_map<InstrType, std::string> instrString = {
 enum class Register {
     RAX,
     RBX,
+    RCX,
+    RDX,
     RSP
 };
 
 std::unordered_map<Register, std::string> regString = {
     {Register::RAX, "RAX"},
     {Register::RBX, "RBX"},
+    {Register::RCX, "RCX"},
+    {Register::RDX, "RDX"},
     {Register::RSP, "RSP"},
 };
 
