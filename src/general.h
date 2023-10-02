@@ -565,6 +565,7 @@ Stmt::Stmt(Statement stmtType) : type(stmtType) {
     }
 }
 
+
 Stmt::~Stmt() {
     switch (type) {
     case(Statement::IF_NODE): {
@@ -618,6 +619,7 @@ void defineLanguageGrammar() {
     patternList[CstNonTerminal::DECL] = { {CstNonTerminal::VAR_DECL}, {CstNonTerminal::FUN_DECL}};
 
     // atm functions have to have a type.
+    // therefore they have to 
     patternList[CstNonTerminal::FUN_DECL] = { {CstNonTerminal::TYPESPEC, TokenType::_ID, TokenType::_OPENBRACK, CstNonTerminal::PARMS, TokenType::_CLOSEBRACK, CstNonTerminal::COMPOUND_STMT}};
     
     // either has parameters or doesn't

@@ -72,7 +72,6 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable, bool n
                 }
                 newNumVarExpr = new NumVarExpr(Operand::VAR_NODE, new VarNode(factorToken.varName, tblEntry));
             }
-            
         }
 
         // if function call
@@ -199,7 +198,6 @@ bool declaredInScope(SymbolTable* currentTable, std::string varName, ClassType c
     }
     return false;
 }
-
 
 Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable);
 

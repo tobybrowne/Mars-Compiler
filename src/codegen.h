@@ -60,9 +60,11 @@ void merge(std::vector<Instr*> &block1, std::vector<Instr*> &block2) {
 // write this so it doesn't need an input block?
 std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*> block, Register retReg) {
     switch (numVarExpr->type) {
+        
+        // these top ones only run for "expressions" w no opcodes e.g: a = 3;
         case Operand::FUNCCALL_NODE:
             block.push_back(new Instr(InstrType::CALL, { x86operand(x86OperandTypes::LABEL, numVarExpr->data.funccall->tableEntry->name)}));
-            // rax is the return register
+            // rax is  return register
             if (retReg != Register::RAX) {
                 block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::REGISTER, Register::RAX) }));
             }
@@ -73,6 +75,8 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
         case Operand::NUMCONST_NODE:
             block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, retReg), x86operand(x86OperandTypes::IMMEDIATE, numVarExpr->data.numconst->val) }));
             break;
+
+        // ran most of the time...
         case Operand::EXPR_NODE:
             ExprNode* exprTree = numVarExpr->data.expr;
             TokenType opcode = exprTree->opcode;
@@ -88,31 +92,18 @@ std::vector<Instr*> generateExprCode(NumVarExpr* numVarExpr, std::vector<Instr*>
                 operands.push_back(exprTree->b);
             }
 
-            for (int i = 0; i < operands.size(); i++) {
-                switch (operandTypes[i]) {
-                    case Operand::EXPR_NODE: {
-                        std::vector<Instr*> newInstrs = generateExprCode(operands[i], block, registers[i]);
-                        merge(block, newInstrs);
-                        break;
-                    }
+            std::vector<Instr*> newBlock;
 
-                    // TO DO: can these be absorbed with the defs at the start by doing another func call?
-                    case Operand::VAR_NODE: {
-                        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::STACK_OFFSET, operands[i]->data.var->tableEntry->varData.frameOffset) }));
-                        break;
-                    }                       // should be able to get rid of this extra move and set the numconst as an operand
-                    case Operand::NUMCONST_NODE: {
-                        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::IMMEDIATE, operands[i]->data.numconst->val) }));
-                        break;
-                    }
-                    case Operand::FUNCCALL_NODE: {
-                        block.push_back(new Instr(InstrType::CALL, { x86operand(x86OperandTypes::LABEL, operands[i]->data.funccall->tableEntry->name) }));
-                        // rax is the return register
-                        block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::REGISTER, registers[i]), x86operand(x86OperandTypes::REGISTER, Register::RAX)}));
-                        break;
-                    }
+            for (int i = 0; i < operands.size(); i++) {
+                if (operandTypes[i] == Operand::EXPR_NODE) {
+                    block = generateExprCode(operands[i], block, registers[i]);
+                }
+                else {
+                    merge(newBlock, generateExprCode(operands[i], block, registers[i]));
                 }
             }
+            // ensures the order is preserved
+            merge(block, newBlock);
 
             // if opcode is a relative operator...
             if (std::find(relativeOps.begin(), relativeOps.end(), opcode) != relativeOps.end()) {
