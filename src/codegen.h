@@ -213,6 +213,14 @@ std::vector<Instr*> generateAssignCode(Stmt* assignNode, programState state) {
     // can function be edited so it doesn't take in an expression?
     block = generateExprCode(assignNode->assignNode.init.exprTree, {}, Register::RAX, true);
     block.push_back(new Instr(InstrType::MOV, { x86operand(x86OperandTypes::STACK_OFFSET, stackOffset), x86operand(x86OperandTypes::REGISTER, Register::RAX) })); // cmp rax #0
+    
+    // further assignment...
+    if (assignNode->assignNode.furtherAssign) {
+        std::vector<Instr*> moreAssign = generateAssignCode(assignNode->assignNode.init.assignNode,state);
+        merge(moreAssign, block);
+        return moreAssign;
+    }
+    
     return block;
 }
 

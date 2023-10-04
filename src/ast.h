@@ -272,8 +272,6 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
 
         Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
         
-        
-
         // find data type of return value.
         TokenType dataTypeToken = funcNode->childrenNodes[0]->childrenNodes[0]->token.type;
         Datatype dataType;
