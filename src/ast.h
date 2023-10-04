@@ -201,11 +201,11 @@ bool declaredInScope(SymbolTable* currentTable, std::string varName, ClassType c
 
 Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable);
 
-Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable);
+Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable, TableEntry* masterFunc);
 
 // generates a vector of declerations from the recursive CST decl structure.
 // assume this is global atm (we can remove local function defs later)
-std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector, SymbolTable* symbolTable) {
+std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector, SymbolTable* symbolTable, TableEntry* masterFunc) {
     std::vector<CstNode*> childrenNodes = decListCSTNode->childrenNodes;
 
     if (childrenNodes.size() == 1) { // at dead end...
@@ -236,6 +236,14 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
         // increment frame offset
         symbolTable->currFrameOffset += 8; // for an 64 bit integer
 
+        // keep track of the memory required for the function (can't be called for global declarations)
+        if (masterFunc != NULL) {
+            if (symbolTable->currFrameOffset > masterFunc->funcData.memRequired) {
+                masterFunc->funcData.memRequired = symbolTable->currFrameOffset;
+            }
+        }
+        
+
         // if declaration has an assignment add an assign node to AST.
         if (varDeclNode->childrenNodes[1]->childrenNodes.size() != 1) {
             Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
@@ -252,13 +260,33 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
     // if its a function declaration
     else {
         CstNode* funcNode = childrenNodes[0]->childrenNodes[0];
-        
-        Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
-        
         // TO DO: rename varName to idName in token class
         std::string funcName = funcNode->childrenNodes[1]->token.varName;
+
+        // stops a function declaration within a function.
+        if (masterFunc != NULL) {
+            std::string masterFuncName = masterFunc->name;
+            std::cout << "FUNCTION " << funcName << " DECLARED INSIDE OF " << masterFuncName <<"!]" << std::endl;
+            getchar();
+        }
+
+        Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
         
-        funcDecl->funcDeclNode.innerCode = createStmtSeqNodeAST(funcNode->childrenNodes[5], symbolTable);
+        
+
+        // find data type of return value.
+        TokenType dataTypeToken = funcNode->childrenNodes[0]->childrenNodes[0]->token.type;
+        Datatype dataType;
+        switch (dataTypeToken) {
+        case TokenType::_INT:
+            dataType = Datatype::INT;
+        }
+
+        // create symbol table entry for function.
+        TableEntry* newSymTblEntry = new TableEntry(funcName, ClassType::FUNCTION, dataType, 0);
+
+        // set masterFunc to NULL here? (could be a good indicator for whether ur in a function)
+        funcDecl->funcDeclNode.innerCode = createStmtSeqNodeAST(funcNode->childrenNodes[5], symbolTable, newSymTblEntry);
         
         decASTNodeVector.push_back(funcDecl);
 
@@ -267,15 +295,7 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
             getchar();
         }
 
-        TokenType dataTypeToken = funcNode->childrenNodes[0]->childrenNodes[0]->token.type;
-        Datatype dataType;
-        switch (dataTypeToken) {
-            case TokenType::_INT:
-                dataType = Datatype::INT;
-        }
-
         // add to symbol table...
-        TableEntry* newSymTblEntry = new TableEntry(funcName, ClassType::FUNCTION, dataType, 100);
         symbolTable->entries.push_back(newSymTblEntry);
 
         funcDecl->funcDeclNode.tableEntry = newSymTblEntry;
@@ -283,16 +303,16 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
         //TO DO: calculate memory required for function
     }
 
-    decASTNodeVector = createDeclListAST(childrenNodes[1], decASTNodeVector, symbolTable); // manages further decList
+    decASTNodeVector = createDeclListAST(childrenNodes[1], decASTNodeVector, symbolTable, masterFunc); // manages further decList
     return decASTNodeVector;
 }
 
 // forward declaration required.
-std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector, SymbolTable* symbolTable);
+std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector, SymbolTable* symbolTable, TableEntry* masterFunc);
 
 // converts CST cmpdStmt to AST stmtSeqNode
 // this is the only time a new scope is entered (very nice).
-Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable) {
+Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable, TableEntry* masterFunc) {
     std::vector<Stmt*> decList;
     std::vector<Stmt*> stmtList;
     std::vector<CstNode*> childrenNodes = cstCompoundStmt->childrenNodes;
@@ -305,10 +325,10 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable) {
     Stmt* newStmtSeqNode = new Stmt(Statement::STMTSEQ_NODE);
 
     // manages decList...
-    decList = createDeclListAST(childrenNodes[1], {}, innerSymbolTable);
+    decList = createDeclListAST(childrenNodes[1], {}, innerSymbolTable, masterFunc);
 
     // manages stmtList...
-    stmtList = createStmtListAST(childrenNodes[2], {}, innerSymbolTable);
+    stmtList = createStmtListAST(childrenNodes[2], {}, innerSymbolTable, masterFunc);
 
     decList.insert(decList.end(), stmtList.begin(), stmtList.end()); // merges decList and stmtList
     newStmtSeqNode->seqNode.stmts = decList;
@@ -323,31 +343,31 @@ Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable) {
 
 
 // creates AST if node from CST node.
-Stmt* createIfNodeAST(CstNode* cstSelectStmt, SymbolTable* symbolTable) {
+Stmt* createIfNodeAST(CstNode* cstSelectStmt, SymbolTable* symbolTable, TableEntry* masterFunc) {
     std::vector<CstNode*> childrenNodes = cstSelectStmt->childrenNodes;
 
     Stmt* newIfNode = new Stmt(Statement::IF_NODE);
 
     newIfNode->ifNode.condition = createExprTreeAST(childrenNodes[2], symbolTable); // is this always an expression?
 
-    newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[4], symbolTable);
+    newIfNode->ifNode.ifBody = createStmtSeqNodeAST(childrenNodes[4], symbolTable, masterFunc);
 
     // if else statement is present...
     if (childrenNodes.size() == 7) {
         newIfNode->ifNode.elsePresent = true;
-        newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[6], symbolTable);
+        newIfNode->ifNode.elseBody = createStmtSeqNodeAST(childrenNodes[6], symbolTable, masterFunc);
     }
 
     return newIfNode;
 }
 
 // creates AST while node from CST node.
-Stmt* createWhileNodeToAST(CstNode* cstIterStmt, SymbolTable* symbolTable) {
+Stmt* createWhileNodeToAST(CstNode* cstIterStmt, SymbolTable* symbolTable, TableEntry* masterFunc) {
     std::vector<CstNode*> childrenNodes = cstIterStmt->childrenNodes;
 
     Stmt* newWhileNode = new Stmt(Statement::WHILE_NODE);
     newWhileNode->whileNode.condition = createExprTreeAST(childrenNodes[2], symbolTable);
-    newWhileNode->whileNode.body = createStmtSeqNodeAST(childrenNodes[4], symbolTable);
+    newWhileNode->whileNode.body = createStmtSeqNodeAST(childrenNodes[4], symbolTable, masterFunc);
 
     return newWhileNode;
 }
@@ -374,7 +394,7 @@ Stmt* createBreakNodeAST(CstNode* cstIterStmt) {
 }
 
 // takes a "stmt" non terminal and creates the correct stmt node.;
-Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable) {
+Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable, TableEntry* masterFunc) {
     CstNode* specificStmt = stmtNodeAST->childrenNodes[0];
     CstNonTerminal stmtType = specificStmt->val.nonTerm;
 
@@ -382,19 +402,18 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable) {
     switch (stmtType) {
     case(CstNonTerminal::EXP_STMT):
         if (specificStmt->childrenNodes.size() == 1) {
-            std::cout << "hola" << std::endl;
             return NULL;
         }
         return createAssignNodeAST(specificStmt->childrenNodes[0], symbolTable);
 
     case(CstNonTerminal::COMPOUND_STMT):
-        return createStmtSeqNodeAST(specificStmt, symbolTable);
+        return createStmtSeqNodeAST(specificStmt, symbolTable, masterFunc);
 
     case(CstNonTerminal::SELECT_STMT):
-        return createIfNodeAST(specificStmt, symbolTable);
+        return createIfNodeAST(specificStmt, symbolTable, masterFunc);
 
     case(CstNonTerminal::ITER_STMT):
-        return createWhileNodeToAST(specificStmt, symbolTable);
+        return createWhileNodeToAST(specificStmt, symbolTable, masterFunc);
 
     case(CstNonTerminal::RETURN_STMT):
         return createReturnNodeAST(specificStmt, symbolTable);
@@ -405,18 +424,18 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable) {
 }
 
 // generates a vector of stmts from the recursive CST stmt structure.
-std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector, SymbolTable* symbolTable) {
+std::vector<Stmt*> createStmtListAST(CstNode* stmtList, std::vector<Stmt*> smtASTNodeVector, SymbolTable* symbolTable, TableEntry* masterFunc) {
     std::vector<CstNode*> childrenNodes = stmtList->childrenNodes;
 
     if (childrenNodes.size() == 1) { // at dead end...
         return smtASTNodeVector;
     }
     else {
-        Stmt* newStmtNode = createStmtNodeAST(childrenNodes[0], symbolTable);
+        Stmt* newStmtNode = createStmtNodeAST(childrenNodes[0], symbolTable, masterFunc);
         if (newStmtNode != NULL) {
             smtASTNodeVector.push_back(newStmtNode);
         }
-        smtASTNodeVector = createStmtListAST(childrenNodes[1], smtASTNodeVector, symbolTable); // manages furtherstmtDecl
+        smtASTNodeVector = createStmtListAST(childrenNodes[1], smtASTNodeVector, symbolTable, masterFunc); // manages furtherstmtDecl
         return smtASTNodeVector;
     }
 }
@@ -428,7 +447,7 @@ Stmt* createAST(CstNode* cstRootNode) {
     SymbolTable* globalTable = new SymbolTable();
 
     Stmt* astRootNode = new Stmt(Statement::STMTSEQ_NODE);
-    astRootNode->seqNode.stmts = createDeclListAST(cstRootNode->childrenNodes[0], {}, globalTable);
+    astRootNode->seqNode.stmts = createDeclListAST(cstRootNode->childrenNodes[0], {}, globalTable, NULL);
 
     return astRootNode;
 }
