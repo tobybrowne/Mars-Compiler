@@ -64,20 +64,20 @@ NumVarExpr* createExprTreeAST(CstNode* cstExpr, SymbolTable* symbolTable, bool n
                 newNumVarExpr = new NumVarExpr(Operand::NUMCONST_NODE, new NumConstNode(factorToken.numConstVal));
             }
             else if (factorType == TokenType::_ID) {
-                TableEntry* tblEntry = getTblEntry(symbolTable, factorToken.varName, ClassType::VARIABLE);
+                TableEntry* tblEntry = getTblEntry(symbolTable, factorToken.idName, ClassType::VARIABLE);
 
                 if (tblEntry == NULL) {
-                    std::cout << "VARIABLE " << factorToken.varName << " NOT DECLARED!]" << std::endl;
+                    std::cout << "VARIABLE " << factorToken.idName << " NOT DECLARED!]" << std::endl;
                     getchar();
                 }
-                newNumVarExpr = new NumVarExpr(Operand::VAR_NODE, new VarNode(factorToken.varName, tblEntry));
+                newNumVarExpr = new NumVarExpr(Operand::VAR_NODE, new VarNode(factorToken.idName, tblEntry));
             }
         }
 
         // if function call
         else {
             CstNode* funcCallNode = childrenNodes[0];
-            std::string funcName = funcCallNode->childrenNodes[0]->token.varName;
+            std::string funcName = funcCallNode->childrenNodes[0]->token.idName;
 
             TableEntry* tblEntry = getTblEntry(symbolTable, funcName, ClassType::FUNCTION);
 
@@ -164,7 +164,7 @@ Stmt* createAssignNodeAST(CstNode* exp, SymbolTable* symbolTable) {
     }
 
     Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
-    std::string varName = exp->childrenNodes[0]->token.varName;
+    std::string varName = exp->childrenNodes[0]->token.idName;
     TableEntry* tblEntry = getTblEntry(symbolTable, varName, ClassType::VARIABLE);
 
     if (tblEntry == NULL) {
@@ -203,6 +203,46 @@ Stmt* createStmtNodeAST(CstNode* stmtNodeAST, SymbolTable* symbolTable);
 
 Stmt* createStmtSeqNodeAST(CstNode* cstCompoundStmt, SymbolTable* symbolTable, TableEntry* masterFunc);
 
+
+// merge these two functions?
+TableEntry* addFuncToSymbolTbl(std::string funcName, CstNode* funcNodeCST, SymbolTable* symbolTable) {
+    TokenType dataTypeToken = funcNodeCST->childrenNodes[0]->childrenNodes[0]->token.type;
+    Datatype dataType;
+    switch (dataTypeToken) {
+        case TokenType::_INT:
+            dataType = Datatype::INT;
+    }
+    TableEntry* newSymTblEntry = new TableEntry(funcName, ClassType::FUNCTION, dataType, 0, true);
+    symbolTable->entries.push_back(newSymTblEntry);
+    return newSymTblEntry;
+}
+
+TableEntry* addVarToSymbolTbl(std::string varName, CstNode* varNodeCST, SymbolTable* symbolTable) {
+    TokenType dataTypeToken = (varNodeCST->childrenNodes)[0]->childrenNodes[0]->token.type;
+    Datatype dataType;
+    int size;
+    switch (dataTypeToken) {
+        case TokenType::_INT:
+            dataType = Datatype::INT;
+            size = 8; // int has 8 bytes.
+    }
+    TableEntry* newSymTblEntry = new TableEntry(varName, ClassType::VARIABLE, dataType, symbolTable->currFrameOffset);
+    symbolTable->entries.push_back(newSymTblEntry);
+    symbolTable->currFrameOffset += size; // increment stack offset (for 64 bit integer)
+    return newSymTblEntry;
+}
+
+Stmt* createVarDeclNodeAST(std::string varName, CstNode* varNodeCST, TableEntry* newSymTblEntry, SymbolTable* symbolTable) {
+    Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
+
+    newAssignNode->assignNode.variable = new VarNode(varName, newSymTblEntry);
+    newAssignNode->assignNode.furtherAssign = false; // not possible with declarations atm.
+
+    NumVarExpr* init = createExprTreeAST((varNodeCST->childrenNodes)[1]->childrenNodes[2], symbolTable);
+    newAssignNode->assignNode.init.exprTree = init;
+    return newAssignNode;
+}
+
 // generates a vector of declerations from the recursive CST decl structure.
 // assume this is global atm (we can remove local function defs later)
 std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*> decASTNodeVector, SymbolTable* symbolTable, TableEntry* masterFunc) {
@@ -215,26 +255,16 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
     // if its a variable declaration...
     if (childrenNodes[0]->childrenNodes[0]->childrenNodes.size() == 3) {
         CstNode* varDeclNode = childrenNodes[0]->childrenNodes[0];
-        std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.varName;
+        std::string varName = (varDeclNode->childrenNodes)[1]->childrenNodes[0]->token.idName;
 
+        // check for double declaration
         if (declaredInScope(symbolTable, varName, ClassType::VARIABLE)) {
             std::cout << "VARIABLE " << varName << " DECLARED TWICE!]" << std::endl;
             getchar();
         }
 
-        TokenType dataTypeToken = (varDeclNode->childrenNodes)[0]->childrenNodes[0]->token.type;
-        Datatype dataType;
-        switch (dataTypeToken) {
-            case TokenType::_INT:
-                dataType = Datatype::INT;
-        }
-
         // add to symbol table...
-        TableEntry* newSymTblEntry = new TableEntry(varName, ClassType::VARIABLE, dataType, symbolTable->currFrameOffset);
-        symbolTable->entries.push_back(newSymTblEntry);
-
-        // increment frame offset
-        symbolTable->currFrameOffset += 8; // for an 64 bit integer
+        TableEntry* varTblEntry = addVarToSymbolTbl(varName, varDeclNode, symbolTable);
 
         // keep track of the memory required for the function (can't be called for global declarations)
         if (masterFunc != NULL) {
@@ -242,63 +272,42 @@ std::vector<Stmt*> createDeclListAST(CstNode* decListCSTNode, std::vector<Stmt*>
                 masterFunc->funcData.memRequired = symbolTable->currFrameOffset;
             }
         }
-        
 
         // if declaration has an assignment add an assign node to AST.
         if (varDeclNode->childrenNodes[1]->childrenNodes.size() != 1) {
-            Stmt* newAssignNode = new Stmt(Statement::ASSIGN_NODE);
-
-            newAssignNode->assignNode.variable = new VarNode(varName, newSymTblEntry);
-            newAssignNode->assignNode.furtherAssign = false; // not possible with declarations atm.
-
-            NumVarExpr* init = createExprTreeAST((varDeclNode->childrenNodes)[1]->childrenNodes[2], symbolTable);
-            newAssignNode->assignNode.init.exprTree = init;
-            decASTNodeVector.push_back(newAssignNode);
-        }
+            Stmt* assignNode = createVarDeclNodeAST(varName, varDeclNode, varTblEntry, symbolTable);
+            decASTNodeVector.push_back(assignNode);
+        }    
     }
 
     // if its a function declaration
     else {
         CstNode* funcNode = childrenNodes[0]->childrenNodes[0];
         // TO DO: rename varName to idName in token class
-        std::string funcName = funcNode->childrenNodes[1]->token.varName;
+        std::string funcName = funcNode->childrenNodes[1]->token.idName;
 
-        // stops a function declaration within a function.
-        if (masterFunc != NULL) {
-            std::string masterFuncName = masterFunc->name;
-            std::cout << "FUNCTION " << funcName << " DECLARED INSIDE OF " << masterFuncName <<"!]" << std::endl;
-            getchar();
-        }
-
-        Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
-        
-        // find data type of return value.
-        TokenType dataTypeToken = funcNode->childrenNodes[0]->childrenNodes[0]->token.type;
-        Datatype dataType;
-        switch (dataTypeToken) {
-        case TokenType::_INT:
-            dataType = Datatype::INT;
-        }
-
-        // create symbol table entry for function.
-        TableEntry* newSymTblEntry = new TableEntry(funcName, ClassType::FUNCTION, dataType, 0);
-
-        // set masterFunc to NULL here? (could be a good indicator for whether ur in a function)
-        funcDecl->funcDeclNode.innerCode = createStmtSeqNodeAST(funcNode->childrenNodes[5], symbolTable, newSymTblEntry);
-        
-        decASTNodeVector.push_back(funcDecl);
-
+        // check for double declaration
         if (declaredInScope(symbolTable, funcName, ClassType::FUNCTION)) {
             std::cout << "FUNCTION " << funcName << " DECLARED TWICE!]" << std::endl;
             getchar();
         }
 
-        // add to symbol table...
-        symbolTable->entries.push_back(newSymTblEntry);
+        // stops a function declaration within a function.
+        if (masterFunc != NULL) {
+            std::string masterFuncName = masterFunc->name;
+            std::cout << "FUNCTION " << funcName << " DECLARED INSIDE OF " << masterFuncName << "!]" << std::endl;
+            getchar();
+        }
 
-        funcDecl->funcDeclNode.tableEntry = newSymTblEntry;
+        // create symbol table entry for function.
+        TableEntry* funcTblEntry = addFuncToSymbolTbl(funcName, funcNode, symbolTable);
 
-        //TO DO: calculate memory required for function
+        // create AST node
+        Stmt* funcDecl = new Stmt(Statement::FUNC_DECL_NODE);
+        funcDecl->funcDeclNode.innerCode = createStmtSeqNodeAST(funcNode->childrenNodes[5], symbolTable, funcTblEntry);
+        funcDecl->funcDeclNode.tableEntry = funcTblEntry;
+
+        decASTNodeVector.push_back(funcDecl);
     }
 
     decASTNodeVector = createDeclListAST(childrenNodes[1], decASTNodeVector, symbolTable, masterFunc); // manages further decList

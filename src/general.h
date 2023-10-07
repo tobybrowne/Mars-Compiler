@@ -202,20 +202,25 @@ class TableEntry {
 
             struct {
                 int memRequired;
+                bool retVal;
             } funcData;
         };
 
-        // var and func constructor
-        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int intInp) {
+        // var constructor
+        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int inpFrameOff) {
             name = inpName;
             classType = inpClassType;
             dataType = inpDataType;
-            if (inpClassType == ClassType::VARIABLE) {
-                varData.frameOffset = intInp;
-            }
-            else {
-                funcData.memRequired = intInp;
-            } 
+            varData.frameOffset = inpFrameOff;
+        }
+
+        // func constructor
+        TableEntry(std::string inpName, ClassType inpClassType, Datatype inpDataType, int inpMemReq, bool inpRetVal) {
+            name = inpName;
+            classType = inpClassType;
+            dataType = inpDataType;
+            funcData.memRequired = inpMemReq;
+            funcData.retVal = inpRetVal;
         }
 };
 
@@ -270,7 +275,7 @@ struct Token {
     TokenType type;
     // only one can be true at a time so use a union to save memory?!?
     // using a union throws some stupid constructor errors that need to be resolved.
-    std::string varName;
+    std::string idName;
     int numConstVal;
 };
 

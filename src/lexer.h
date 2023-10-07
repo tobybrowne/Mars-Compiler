@@ -163,7 +163,7 @@ std::vector<Token> tokenize(const std::string source_code, bool debugMode) {
         tokenObj.type = currentType;
 
         if (currentType == TokenType::_ID) {
-            tokenObj.varName = alphanumeric;
+            tokenObj.idName = alphanumeric;
         }
         else if (currentType == TokenType::_NUMCONST) {
             tokenObj.numConstVal = stoi(alphanumeric);
